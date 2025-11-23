@@ -1,32 +1,35 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>موقع المهام</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TaskMaster Pro</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-
-<!-- Font Awesome CDN -->
-<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
-
-<!-- Supabase CDN -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.27.0/dist/supabase.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 </head>
 <body>
+
 <header id="header">
-  <div class="header-content">
-    <span id="balanceDisplay">0</span>
-    <button onclick="logout()">تسجيل الخروج</button>
-    <button onclick="accountPage()">حسابي</button>
-    <button onclick="depositPage()">إيداع</button>
-    <button onclick="withdrawPage()">سحب</button>
-    <button onclick="adminLogin()">لوحة الإدارة</button>
+  <div class="header-left">TaskMaster Pro</div>
+  <div class="header-right">
+    <button onclick="accountPage()"><i class="fa-solid fa-user"></i> الحساب</button>
+    <button onclick="depositPage()"><i class="fa-solid fa-credit-card"></i> إيداع</button>
+    <button onclick="withdrawPage()"><i class="fa-solid fa-wallet"></i> سحب</button>
+    <button onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> خروج</button>
+    <button onclick="adminLogin()"><i class="fa-solid fa-shield"></i> إدارة</button>
   </div>
+  <div class="header-balance">الرصيد: <span id="balanceDisplay">0</span>$</div>
 </header>
 
 <div id="app"></div>
 
-<script src="app.js"></script>
+<!-- Supabase CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
+
+<!-- ملف الجافاسكربت بعد تحميل Supabase -->
+<script type="module" src="app.js"></script>
 </body>
 </html>
