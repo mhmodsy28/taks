@@ -4,9 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>TaskMaster Pro</title>
+
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
 </head>
 <body>
 
@@ -24,19 +26,14 @@
 
 <div id="app"></div>
 
-<!-- تحميل Supabase قبل أي كود يعتمد عليها -->
+<!-- Supabase CDN -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
-
 <script>
-  // إعداد Supabase
   const SUPABASE_URL = "https://sogswvvfyrwaibewbhus.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvZ3N3dnZmeXJ3YWliZXdiaHVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5MDMzNjcsImV4cCI6MjA3OTQ3OTM2N30.zgZc0cNRdW62MPWLmk1EymvydH9Kx0svRlvD1uG8VkI";
-
   window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 </script>
 
-<!-- ملف app.js -->
 <script type="module" src="app.js"></script>
-
 </body>
 </html>
