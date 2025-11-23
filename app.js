@@ -8,6 +8,25 @@ function showHeader(show) {
   document.getElementById("header").style.display = show ? "flex" : "none";
 }
 
+// ==== صفحة الحساب ====
+function accountPage() {
+  showHeader(true);
+  document.getElementById("app").innerHTML = `
+    <div class="container">
+      <div class="box">
+        <h2>معلومات الحساب</h2>
+        <p><b>الاسم:</b> ${currentUser.name}</p>
+        <p><b>البريد:</b> ${currentUser.email}</p>
+        <p><b>الرقم الوطني:</b> ${currentUser.nid}</p>
+        <p><b>الهاتف:</b> ${currentUser.country} ${currentUser.phone}</p>
+        <p><b>الرصيد:</b> ${currentUser.balance}$</p>
+        <p><b>المهام المنجزة:</b> ${currentUser.tasksCompleted} / 25</p>
+        <button onclick="homePage()">رجوع</button>
+      </div>
+    </div>
+  `;
+}
+
 // ==== تسجيل الدخول / إنشاء حساب ====
 function loginPage() {
   showHeader(false);
@@ -86,8 +105,16 @@ function homePage() {
   let reward = 20;
 
   for (let i = 0; i < 25; i++) {
+
+    // ↓↓↓ تخفيض مهام 15–25 ↓↓↓
+    if (i >= 14) {
+      depositAmount = 100;
+      reward = 150;
+    }
+
     let locked = currentUser.taskDeposits[i] < depositAmount || currentUser.tasksCompleted < i;
     let completed = currentUser.tasksCompleted > i;
+
     tasksHtml += `
       <div class="task ${locked ? 'locked' : ''}">
         <i class="fa-solid fa-rocket"></i>
@@ -99,7 +126,9 @@ function homePage() {
           <button onclick="openTask(${i},${depositAmount},${reward})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
         </div>
       </div>`;
-    depositAmount *= 2; reward *= 2;
+
+    depositAmount *= 2;
+    reward *= 2;
   }
 
   document.getElementById("app").innerHTML = `
@@ -135,7 +164,7 @@ function checkDeposit(index, dep, rew) {
   homePage();
 }
 
-// ==== الايداع ====
+// ==== الإيداع ====
 function depositPage() {
   document.getElementById("app").innerHTML = `
   <div class="container">
@@ -227,7 +256,6 @@ function approveDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
   let req = user.depositRequests[index];
-  // إضافة الرصيد للمهمة القادمة فقط
   let nextTask = user.tasksCompleted;
   user.taskDeposits[nextTask] += req.amount;
   user.depositRequests.splice(index, 1);
