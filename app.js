@@ -1,11 +1,12 @@
-// ==== CDN Supabase ====
+// ==== Supabase Configuration ====
 const SUPABASE_URL = "https://sogswvvfyrwaibewbhus.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvZ3N3dnZmeXJ3YWliZXdiaHVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5MDMzNjcsImV4cCI6MjA3OTQ3OTM2N30.zgZc0cNRdW62MPWLmk1EymvydH9Kx0svRlvD1uG8VkI";
 
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ==== بيانات المستخدمين ====
+// ==== بيانات المستخدم الحالي ====
 let currentUser = null;
+let adminPassword = "aalmwt10";
 
 // ==== عرض الهيدر ====
 function showHeader(show) {
@@ -17,11 +18,11 @@ function loginPage() {
   showHeader(false);
   document.getElementById("app").innerHTML = `
   <div class="container"><div class="box">
-  <h2 style="text-align:center;">تسجيل الدخول</h2>
-  <input id="loginEmail" type="email" placeholder="البريد الإلكتروني">
-  <input id="loginPass" type="password" placeholder="كلمة المرور">
-  <button onclick="login()">تسجيل الدخول</button>
-  <button onclick="registerPage()" style="background:#444;color:white;">إنشاء حساب</button>
+    <h2 style="text-align:center;">تسجيل الدخول</h2>
+    <input id="loginEmail" type="email" placeholder="البريد الإلكتروني">
+    <input id="loginPass" type="password" placeholder="كلمة المرور">
+    <button onclick="login()">تسجيل الدخول</button>
+    <button onclick="registerPage()" style="background:#444;color:white;">إنشاء حساب</button>
   </div></div>`;
 }
 
@@ -29,53 +30,41 @@ function registerPage() {
   showHeader(false);
   document.getElementById("app").innerHTML = `
   <div class="container"><div class="box">
-  <h2 style="text-align:center;">إنشاء حساب جديد</h2>
-  <input id="regName" placeholder="الاسم الكامل">
-  <input id="regEmail" type="email" placeholder="البريد الإلكتروني">
-  <input id="regNID" placeholder="الرقم الوطني">
-  <input id="regPhone" placeholder="رقم الهاتف">
-  <select id="regCountry">
-    <option value="+963">🇸🇾 سوريا +963</option>
-    <option value="+20">🇪🇬 مصر +20</option>
-    <option value="+971">🇦🇪 الإمارات +971</option>
-    <option value="+90">🇹🇷 تركيا +90</option>
-  </select>
-  <input id="regPass" type="password" placeholder="كلمة المرور">
-  <button onclick="register()">تسجيل</button>
-  <button onclick="loginPage()" style="background:#444;color:white;">رجوع</button>
+    <h2 style="text-align:center;">إنشاء حساب جديد</h2>
+    <input id="regName" placeholder="الاسم الكامل">
+    <input id="regEmail" type="email" placeholder="البريد الإلكتروني">
+    <input id="regPass" type="password" placeholder="كلمة المرور">
+    <button onclick="register()">تسجيل</button>
+    <button onclick="loginPage()" style="background:#444;color:white;">رجوع</button>
   </div></div>`;
 }
 
-// ==== تسجيل مستخدم جديد في Supabase ====
 async function register() {
   let name = document.getElementById("regName").value;
   let email = document.getElementById("regEmail").value;
-  let nid = document.getElementById("regNID").value;
-  let phone = document.getElementById("regPhone").value;
-  let country = document.getElementById("regCountry").value;
   let pass = document.getElementById("regPass").value;
 
-  if (!name || !email || !nid || !phone || !pass) { alert("يرجى ملء جميع الحقول"); return; }
+  if (!name || !email || !pass) { alert("يرجى ملء جميع الحقول"); return; }
 
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from("users")
-    .insert([{ name, email, nid, phone, country, pass, balance:0, tasksCompleted:0, taskDeposits:JSON.stringify(Array(25).fill(0)), depositRequests:JSON.stringify([]), withdrawRequests:JSON.stringify([]) }]);
+    .insert([{ name, email, password: pass, balance: 0, tasksCompleted: 0, depositRequests: [], withdrawRequests: [] }]);
 
   if (error) { alert("خطأ في التسجيل: " + error.message); return; }
-  alert("✅ تم إنشاء الحساب بنجاح");
-  loginPage();
+
+  currentUser = data[0];
+  homePage();
 }
 
-// ==== تسجيل الدخول من Supabase ====
 async function login() {
   let email = document.getElementById("loginEmail").value;
   let pass = document.getElementById("loginPass").value;
 
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from("users")
     .select("*")
     .eq("email", email)
-    .eq("pass", pass)
+    .eq("password", pass)
     .single();
 
   if (error || !data) { alert("بيانات غير صحيحة"); return; }
@@ -84,42 +73,46 @@ async function login() {
   homePage();
 }
 
-// ==== المهام مع أسعار منطقية ====
-const tasksPricing = [];
-let dep = 10;
-let rew = 20;
-for (let i=0;i<25;i++){
-  if(i<14){ // المهمات 1-14 صعود منطقي
-    tasksPricing.push({deposit:dep,reward:rew});
-    dep*=2; rew*=2;
-  } else { // المهمات 15-25 أسعار منطقية مختلفة حتى 10000
-    let nextDep = Math.floor(Math.random()*(5000-100)+100); // إيداع عشوائي 100-5000
-    let nextRew = Math.floor(Math.random()*(10000-nextDep)+nextDep); // ربح حتى 10000
-    tasksPricing.push({deposit:nextDep,reward:nextRew});
+// ==== المهمة الرئيسية ====
+const tasks = [];
+let depositAmounts = [10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120];
+let rewardAmounts = [20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10000];
+
+// إنشاء 25 مهمة بأسعار منطقية
+for (let i = 0; i < 25; i++) {
+  if (i < 15) {
+    tasks.push({ deposit: 10 * (i + 1), reward: 20 * (i + 1) });
+  } else {
+    let depIndex = i - 15;
+    tasks.push({
+      deposit: depositAmounts[depIndex] || 8000,
+      reward: rewardAmounts[depIndex] || 10000
+    });
   }
 }
 
 // ==== الصفحة الرئيسية + المهام ====
-function homePage() {
+async function homePage() {
   showHeader(true);
+  // تحديث بيانات المستخدم من قاعدة البيانات
+  const { data, error } = await supabase.from("users").select("*").eq("id", currentUser.id).single();
+  if (!error && data) currentUser = data;
+
   let tasksHtml = "";
-
-  let taskDeposits = JSON.parse(currentUser.taskDeposits);
-
   for (let i = 0; i < 25; i++) {
-    let locked = taskDeposits[i] < tasksPricing[i].deposit || currentUser.tasksCompleted < i;
+    let locked = currentUser.tasksCompleted < i;
     let completed = currentUser.tasksCompleted > i;
     tasksHtml += `
-      <div class="task ${locked ? 'locked' : ''}">
-        <i class="fa-solid fa-rocket"></i>
-        <div class="task-content">
-          <h3>المهمة رقم ${i + 1}</h3>
-          <p>الإيداع المطلوب: <b>${tasksPricing[i].deposit}$</b></p>
-          <p>الربح عند الإنجاز: <b>${tasksPricing[i].reward}$</b></p>
-          <p>الحالة: <b>${completed ? 'تم الإنجاز' : locked ? 'مقفلة' : 'جاهزة'}</b></p>
-          <button onclick="openTask(${i})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
-        </div>
-      </div>`;
+    <div class="task ${locked ? 'locked' : ''}">
+      <i class="fa-solid fa-rocket"></i>
+      <div class="task-content">
+        <h3>المهمة رقم ${i + 1}</h3>
+        <p>الإيداع المطلوب: <b>${tasks[i].deposit}$</b></p>
+        <p>الربح عند الإنجاز: <b>${tasks[i].reward}$</b></p>
+        <p>الحالة: <b>${completed ? 'تم الإنجاز' : locked ? 'مقفلة' : 'جاهزة'}</b></p>
+        <button onclick="openTask(${i})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
+      </div>
+    </div>`;
   }
 
   document.getElementById("app").innerHTML = `
@@ -135,27 +128,28 @@ function openTask(index) {
   <div class="container">
     <div class="box">
       <h2>المهمة رقم ${index + 1}</h2>
-      <p>المطلوب قبل التنفيذ: إيداع ${tasksPricing[index].deposit}$</p>
-      <p>ربحك بعد الإنجاز: ${tasksPricing[index].reward}$</p>
-      <button onclick="checkDeposit(${index})">تنفيذ المهمة</button>
+      <p>المطلوب قبل التنفيذ: إيداع ${tasks[index].deposit}$</p>
+      <p>ربحك بعد الإنجاز: ${tasks[index].reward}$</p>
+      <button onclick="completeTask(${index})">تنفيذ المهمة</button>
       <button class="back-btn" onclick="homePage()">رجوع</button>
     </div>
   </div>`;
 }
 
-// ==== تنفيذ المهمة ====
-async function checkDeposit(index) {
-  let taskDeposits = JSON.parse(currentUser.taskDeposits);
-  if(taskDeposits[index]<tasksPricing[index].deposit){ alert("❌ لا يمكن تنفيذ المهمة بدون الإيداع المطلوب"); return; }
+async function completeTask(index) {
+  if (currentUser.balance < tasks[index].deposit) {
+    alert(`❌ لا يمكن تنفيذ المهمة بدون إيداع ${tasks[index].deposit}$`);
+    return;
+  }
+  currentUser.balance += tasks[index].reward;
+  currentUser.tasksCompleted = Math.max(currentUser.tasksCompleted, index + 1);
 
-  currentUser.balance += tasksPricing[index].reward;
-  currentUser.tasksCompleted = Math.max(currentUser.tasksCompleted,index+1);
-  taskDeposits[index] = tasksPricing[index].deposit; // تأكيد الإيداع
-  currentUser.taskDeposits = JSON.stringify(taskDeposits);
+  const { error } = await supabase.from("users").update({
+    balance: currentUser.balance,
+    tasksCompleted: currentUser.tasksCompleted
+  }).eq("id", currentUser.id);
 
-  let { error } = await supabase.from("users").update({ balance: currentUser.balance, tasksCompleted: currentUser.tasksCompleted, taskDeposits: currentUser.taskDeposits }).eq("email",currentUser.email);
-  if(error){ alert("خطأ: "+error.message); return; }
-
+  if (error) { alert("حدث خطأ"); return; }
   alert("✅ تم تنفيذ المهمة وتم إضافة الأرباح!");
   homePage();
 }
@@ -179,18 +173,13 @@ function depositPage() {
 async function submitDeposit() {
   let amount = parseFloat(document.getElementById("depositAmount").value);
   let image = document.getElementById("depositImage").files[0];
-  if(!amount || !image){ alert("يرجى إدخال المبلغ ورفع الصورة"); return; }
+  if (!amount || !image) { alert("يرجى إدخال المبلغ ورفع الصورة"); return; }
 
   let reader = new FileReader();
-  reader.onload = async function(){
-    let depositReq = { amount, image: reader.result, date: new Date().toLocaleString() };
-    let depositRequests = JSON.parse(currentUser.depositRequests || "[]");
-    depositRequests.push(depositReq);
-    currentUser.depositRequests = JSON.stringify(depositRequests);
-
-    let { error } = await supabase.from("users").update({ depositRequests: currentUser.depositRequests }).eq("email",currentUser.email);
-    if(error){ alert("خطأ: "+error.message); return; }
-
+  reader.onload = async function () {
+    let depositData = { amount, image: reader.result, date: new Date().toISOString(), user_id: currentUser.id };
+    const { error } = await supabase.from("deposits").insert([depositData]);
+    if (error) { alert("خطأ في إرسال الطلب"); return; }
     alert("✅ تم إرسال طلب الإيداع");
     homePage();
   }
@@ -199,7 +188,6 @@ async function submitDeposit() {
 
 // ==== السحب ====
 function withdrawPage() {
-  if(currentUser.tasksCompleted<20){ alert("❌ لا يمكن السحب قبل المهمة 20"); return; }
   document.getElementById("app").innerHTML = `
   <div class="container">
     <div class="box">
@@ -213,80 +201,63 @@ function withdrawPage() {
 }
 
 async function submitWithdraw() {
-  let wallet = document.getElementById("withdrawWallet").value;
-  if(!wallet){ alert("يرجى إدخال المحفظة"); return; }
+  let w = document.getElementById("withdrawWallet").value;
+  if (!w) { alert("يرجى إدخال المحفظة"); return; }
 
-  let withdrawRequests = JSON.parse(currentUser.withdrawRequests || "[]");
-  withdrawRequests.push({ wallet, amount: currentUser.balance, date: new Date().toLocaleString() });
-  currentUser.withdrawRequests = JSON.stringify(withdrawRequests);
+  const { error } = await supabase.from("withdraws").insert([{
+    wallet: w,
+    amount: currentUser.balance,
+    date: new Date().toISOString(),
+    user_id: currentUser.id
+  }]);
+
+  if (error) { alert("خطأ في إرسال الطلب"); return; }
+
   currentUser.balance = 0;
-
-  let { error } = await supabase.from("users").update({ withdrawRequests: currentUser.withdrawRequests, balance: currentUser.balance }).eq("email",currentUser.email);
-  if(error){ alert("خطأ: "+error.message); return; }
-
+  await supabase.from("users").update({ balance: 0 }).eq("id", currentUser.id);
   alert("✅ تم إرسال طلب السحب");
   homePage();
 }
 
-// ==== لوحة الإدارة ====
-const adminPassword = "aalmwt10";
+// ==== تسجيل الخروج ====
+function logout() { currentUser = null; showHeader(false); loginPage(); }
+
+// ==== إدارة الموقع ====
 async function adminLogin() {
   let pwd = prompt("ادخل كلمة مرور الادمن:");
-  if(pwd !== adminPassword){ alert("كلمة مرور خاطئة"); return; }
+  if (pwd !== adminPassword) { alert("كلمة مرور خاطئة"); return; }
 
   showHeader(false);
-
-  let { data: allUsersData, error } = await supabase.from("users").select("*");
-  if(error){ alert("خطأ: "+error.message); return; }
+  const { data, error } = await supabase.from("deposits").select("*, users(name,email)").order("date", { ascending: false });
 
   let requestsHtml = "";
-  allUsersData.forEach(u=>{
-    let depReqs = JSON.parse(u.depositRequests || "[]");
-    depReqs.forEach((r,i)=>{
-      requestsHtml += `
-      <div class="admin-request">
-        <p><b>المستخدم:</b> ${u.name} | ${u.email} | ${u.phone}</p>
-        <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
-        <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;display:block;">
-        <div style="display:flex;gap:10px;">
-          <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
-          <button class="reject" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
-        </div>
-      </div>`;
-    });
+  data.forEach(r => {
+    requestsHtml += `
+    <div class="admin-request">
+      <p><b>المستخدم:</b> ${r.users.name} | ${r.users.email}</p>
+      <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
+      <img src="${r.image}" alt="صورة الإيداع">
+      <div style="display:flex;gap:10px;">
+        <button onclick="approveDeposit(${r.id})">✅ قبول</button>
+        <button class="reject" onclick="rejectDeposit(${r.id})">❌ رفض</button>
+      </div>
+    </div>`;
   });
 
   document.getElementById("app").innerHTML = `<div class="container"><div class="admin-box"><h2>طلبات الإيداع</h2>${requestsHtml}<button class="back-btn" onclick="homePage()">رجوع</button></div></div>`;
 }
 
-async function approveDeposit(email,index){
-  let { data, error } = await supabase.from("users").select("*").eq("email",email).single();
-  if(error || !data) return;
-
-  let depReqs = JSON.parse(data.depositRequests || "[]");
-  let nextTask = data.tasksCompleted;
-  let taskDeposits = JSON.parse(data.taskDeposits || "[]");
-  taskDeposits[nextTask] += depReqs[index].amount;
-  depReqs.splice(index,1);
-
-  await supabase.from("users").update({ depositRequests: JSON.stringify(depReqs), taskDeposits: JSON.stringify(taskDeposits) }).eq("email",email);
-
-  if(currentUser.email===email){ currentUser.depositRequests=JSON.stringify(depReqs); currentUser.taskDeposits=JSON.stringify(taskDeposits); }
-
+async function approveDeposit(id) {
+  const { data, error } = await supabase.from("deposits").select("*").eq("id", id).single();
+  if (error) return;
+  const { user_id, amount } = data;
+  await supabase.from("users").update({ balance: supabase.raw("balance + ?", [amount]) }).eq("id", user_id);
+  await supabase.from("deposits").delete().eq("id", id);
   adminLogin();
 }
 
-async function rejectDeposit(email,index){
-  let { data, error } = await supabase.from("users").select("*").eq("email",email).single();
-  if(error || !data) return;
-
-  let depReqs = JSON.parse(data.depositRequests || "[]");
-  depReqs.splice(index,1);
-
-  await supabase.from("users").update({ depositRequests: JSON.stringify(depReqs) }).eq("email",email);
-
-  if(currentUser.email===email){ currentUser.depositRequests=JSON.stringify(depReqs); }
-
+async function rejectDeposit(id) {
+  await supabase.from("deposits").delete().eq("id", id);
   adminLogin();
 }
 
