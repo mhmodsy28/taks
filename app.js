@@ -1,6 +1,6 @@
 // ==== إعداد Bin.io ====
-const BIN_ID = "6924db89d0ea881f40fde913"; // ضع هنا Bin ID الخاص بك
-const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2"; // Master Key
+const BIN_ID = "6924db89d0ea881f40fde913"; 
+const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
 // ==== بيانات المستخدم الحالي ====
 let currentUser = null;
