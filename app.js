@@ -17,7 +17,6 @@ async function readData() {
     }
   });
   const data = await res.json();
-  // إذا لم يكن هناك Bin جاهز للمستخدمين والمهمات، انشئ هيكل فارغ
   if (!data.record.users) data.record.users = [];
   if (!data.record.tasks) {
     data.record.tasks = Array.from({length:25}, (_,i)=>({id:i+1, deposit:0, reward:20*(2**i)}));
@@ -117,7 +116,7 @@ async function login() {
   homePage();
 }
 
-// ==== عرض الصفحة الرئيسية والمهام ====
+// ==== الصفحة الرئيسية والمهام ====
 async function homePage() {
   showHeader(true);
   let data = await readData();
@@ -202,37 +201,104 @@ async function depositPage() {
       <p>لإضافة رصيد، يرجى تحويل المبلغ إلى المحفظة التالية:</p>
       <p style="font-weight:bold;">USDT TRC20: <span style="color:#ff416c;">TQi3mspeUBS1Y4NknPu4zZVFiFG2JU5MkX</span></p>
       <input id="depositAmount" type="number" placeholder="المبلغ الذي حولته">
+      <input id="depositImage" type="file" accept="image/*">
       <button onclick="submitDeposit()">تقديم طلب الإيداع</button>
       <button class="back-btn" onclick="homePage()">رجوع</button>
     </div>
   </div>`;
 }
 
-// ==== تنفيذ الإيداع ====
+// ==== تقديم طلب الإيداع ====
 async function submitDeposit() {
   let amount = parseFloat(document.getElementById("depositAmount").value);
+  let imageFile = document.getElementById("depositImage")?.files[0];
+
   if (!amount || amount <= 0) { alert("يرجى إدخال مبلغ صحيح"); return; }
+  if (!imageFile) { alert("يرجى رفع صورة الإيداع"); return; }
 
-  currentUser.balance += amount;
-  let nextTask = currentUser.tasksCompleted;
-  if (nextTask < 25) currentUser.taskDeposits[nextTask] += amount;
-
-  let data = await readData();
-  let userIndex = data.users.findIndex(u => u.id === currentUser.id);
-  if (userIndex !== -1) {
-    data.users[userIndex] = currentUser;
-    data.transactions.push({
-      id: data.transactions.length + 1,
-      user_id: currentUser.id,
-      type: "deposit",
+  let reader = new FileReader();
+  reader.onload = async function() {
+    currentUser.depositRequests.push({
       amount,
-      date: new Date().toISOString()
+      image: reader.result,
+      date: new Date().toLocaleString()
     });
-    await updateData(data);
-  }
 
-  alert(`✅ تم إضافة ${amount}$ إلى رصيدك`);
-  homePage();
+    let data = await readData();
+    let userIndex = data.users.findIndex(u => u.id === currentUser.id);
+    if (userIndex !== -1) {
+      data.users[userIndex] = currentUser;
+      await updateData(data);
+    }
+
+    alert("✅ تم إرسال طلب الإيداع للموافقة عليه من قبل الإدارة");
+    homePage();
+  }
+  reader.readAsDataURL(imageFile);
+}
+
+// ==== لوحة الإدارة ====
+async function adminLogin() {
+  let pwd = prompt("ادخل كلمة مرور الادمن:");
+  if (pwd !== adminPassword) { alert("كلمة مرور خاطئة"); return; }
+
+  showHeader(false);
+  let data = await readData();
+  let requestsHtml = "";
+
+  data.users.forEach(u => {
+    u.depositRequests.forEach((r, i) => {
+      requestsHtml += `
+      <div class="admin-request">
+        <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
+        <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
+        <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;display:block;margin:10px 0;">
+        <div style="display:flex;gap:10px;margin-bottom:20px;">
+          <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
+          <button class="reject" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
+        </div>
+      </div>`;
+    });
+  });
+
+  if (!requestsHtml) requestsHtml = "<p>لا توجد طلبات إيداع حالياً</p>";
+
+  document.getElementById("app").innerHTML = `
+  <div class="container">
+    <div class="admin-box">
+      <h2>طلبات الإيداع</h2>
+      ${requestsHtml}
+      <button class="back-btn" onclick="homePage()">رجوع</button>
+    </div>
+  </div>`;
+}
+
+// ==== قبول طلب الإيداع ====
+async function approveDeposit(email, index) {
+  let data = await readData();
+  let user = data.users.find(u => u.email === email);
+  if (!user) return;
+  let req = user.depositRequests[index];
+  let nextTask = user.tasksCompleted;
+  if (nextTask < 25) user.taskDeposits[nextTask] += req.amount;
+  user.balance += req.amount;
+
+  user.depositRequests.splice(index,1);
+  await updateData(data);
+
+  if (currentUser && currentUser.email === email) currentUser = user;
+  adminLogin();
+}
+
+// ==== رفض طلب الإيداع ====
+async function rejectDeposit(email, index) {
+  let data = await readData();
+  let user = data.users.find(u => u.email === email);
+  if (!user) return;
+
+  user.depositRequests.splice(index,1);
+  await updateData(data);
+  adminLogin();
 }
 
 // ==== صفحة السحب ====
@@ -281,7 +347,7 @@ async function submitWithdraw() {
   homePage();
 }
 
-// ==== عرض الحساب ====
+// ==== حساب المستخدم ====
 async function accountPage() {
   showHeader(true);
   document.getElementById("app").innerHTML = `
@@ -298,16 +364,6 @@ async function accountPage() {
       <button onclick="homePage()">رجوع</button>
     </div>
   </div>`;
-}
-
-// ==== تحديث بيانات المستخدم في Bin ====
-async function updateUser() {
-  let data = await readData();
-  let index = data.users.findIndex(u => u.id === currentUser.id);
-  if (index !== -1) {
-    data.users[index] = currentUser;
-    await updateData(data);
-  }
 }
 
 // ==== تسجيل الخروج ====
