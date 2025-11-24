@@ -249,7 +249,7 @@ async function approveDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
   let req = user.depositRequests[index];
-  user.balance += req.amount; // إضافة الرصيد
+  user.balance += req.amount;
   user.depositRequests.splice(index, 1);
   await updateData();
   await readData();
