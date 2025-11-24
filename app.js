@@ -18,9 +18,7 @@ async function readData() {
   });
   const data = await res.json();
   if (!data.record.users) data.record.users = [];
-  if (!data.record.tasks) {
-    data.record.tasks = Array.from({length:25}, (_,i)=>({id:i+1, deposit:0, reward:20*(2**i)}));
-  }
+  if (!data.record.tasks) data.record.tasks = Array.from({length:25}, (_,i)=>({id:i+1, deposit:0, reward:20*(2**i)}));
   if (!data.record.transactions) data.record.transactions = [];
   return data.record;
 }
@@ -243,13 +241,18 @@ async function submitDeposit() {
 
 // ==== لوحة الإدارة ====
 async function adminLogin() {
-  let pwd = prompt("ادخل كلمة مرور الادمن:");
-  if (pwd !== adminPassword) { alert("كلمة مرور خاطئة"); return; }
+  const pwd = prompt("ادخل كلمة مرور الادمن:");
+  if (pwd !== adminPassword) {
+    alert("كلمة مرور خاطئة");
+    return;
+  }
 
-  showHeader(true);
-  let data = await readData();
+  showHeader(true); // تأكد من عرض الهيدر
+
+  const data = await readData(); // جلب آخر بيانات المستخدمين من Bin
   let requestsHtml = "";
 
+  // جمع جميع طلبات الإيداع لجميع المستخدمين
   data.users.forEach(u => {
     u.depositRequests.forEach((r, i) => {
       requestsHtml += `
@@ -259,7 +262,7 @@ async function adminLogin() {
         <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;display:block;margin:10px 0;">
         <div style="display:flex;gap:10px;margin-bottom:20px;">
           <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
-          <button class="reject" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
+          <button onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
         </div>
       </div>`;
     });
@@ -279,25 +282,26 @@ async function adminLogin() {
 
 // ==== قبول/رفض طلب الإيداع ====
 async function approveDeposit(email, index) {
-  let data = await readData();
-  let user = data.users.find(u => u.email === email);
+  const data = await readData();
+  const user = data.users.find(u => u.email === email);
   if (!user) return;
-  let req = user.depositRequests[index];
-  let nextTask = user.tasksCompleted;
+
+  const req = user.depositRequests[index];
+  const nextTask = user.tasksCompleted;
   if (nextTask < 25) user.taskDeposits[nextTask] += req.amount;
   user.balance += req.amount;
-
   user.depositRequests.splice(index,1);
+
   await updateData(data);
 
-  if (currentUser && currentUser.email === email) currentUser = user;
+  if (currentUser?.email === email) currentUser = user;
   localStorage.setItem("taskUser", JSON.stringify(currentUser));
   adminLogin();
 }
 
 async function rejectDeposit(email, index) {
-  let data = await readData();
-  let user = data.users.find(u => u.email === email);
+  const data = await readData();
+  const user = data.users.find(u => u.email === email);
   if (!user) return;
 
   user.depositRequests.splice(index,1);
