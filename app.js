@@ -36,11 +36,12 @@ async function updateData() {
   }
 }
 
-// ==== تسجيل الدخول / إنشاء حساب ====
+// ==== عرض/إخفاء الهيدر ====
 function showHeader(show) {
   document.getElementById("header").style.display = show ? "flex" : "none";
 }
 
+// ==== تسجيل الدخول / إنشاء حساب ====
 async function loginPage() {
   showHeader(false);
   document.getElementById("app").innerHTML = `
@@ -60,6 +61,14 @@ async function registerPage() {
   <h2 style="text-align:center;">إنشاء حساب جديد</h2>
   <input id="regName" placeholder="الاسم الكامل">
   <input id="regEmail" type="email" placeholder="البريد الإلكتروني">
+  <input id="regNID" placeholder="الرقم الوطني">
+  <input id="regPhone" placeholder="رقم الهاتف">
+  <select id="regCountry">
+    <option value="+963">🇸🇾 سوريا +963</option>
+    <option value="+20">🇪🇬 مصر +20</option>
+    <option value="+971">🇦🇪 الإمارات +971</option>
+    <option value="+90">🇹🇷 تركيا +90</option>
+  </select>
   <input id="regPass" type="password" placeholder="كلمة المرور">
   <button onclick="register()">تسجيل</button>
   <button onclick="loginPage()" style="background:#444;color:white;">رجوع</button>
@@ -70,10 +79,20 @@ async function register() {
   await readData();
   let name = document.getElementById("regName").value;
   let email = document.getElementById("regEmail").value;
+  let nid = document.getElementById("regNID").value;
+  let phone = document.getElementById("regPhone").value;
+  let country = document.getElementById("regCountry").value;
   let pass = document.getElementById("regPass").value;
-  if (!name || !email || !pass) { alert("يرجى ملء جميع الحقول"); return; }
+  if (!name || !email || !nid || !phone || !pass) { alert("يرجى ملء جميع الحقول"); return; }
 
-  currentUser = { name, email, pass, balance: 0, tasksCompleted: 0, taskDeposits: Array(25).fill(0), depositRequests: [], withdrawRequests: [] };
+  currentUser = {
+    name, email, nid, phone, country, pass,
+    balance: 0,
+    tasksCompleted: 0,
+    taskDeposits: Array(25).fill(0),
+    depositRequests: [],
+    withdrawRequests: []
+  };
   allUsers.push(currentUser);
   await updateData();
   homePage();
@@ -95,9 +114,17 @@ function homePage() {
   let tasksHtml = "";
   let depositAmount = 10;
   let reward = 20;
+
   for (let i = 0; i < 25; i++) {
     let locked = currentUser.taskDeposits[i] < depositAmount || currentUser.tasksCompleted < i;
     let completed = currentUser.tasksCompleted > i;
+
+    // تعديل المهام 15-25 للحد الأقصى 10000$
+    if (i >= 14) {
+      depositAmount = Math.floor(Math.random() * 9000) + 1000; // 1000$ - 10000$
+      reward = Math.floor(Math.random() * 9000) + 1000;
+    }
+
     tasksHtml += `
       <div class="task ${locked ? 'locked' : ''}">
         <i class="fa-solid fa-rocket"></i>
@@ -109,7 +136,7 @@ function homePage() {
           <button onclick="openTask(${i},${depositAmount},${reward})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
         </div>
       </div>`;
-    depositAmount *= 2; reward *= 2;
+    if (i < 14) { depositAmount *= 2; reward *= 2; }
   }
 
   document.getElementById("app").innerHTML = `
@@ -226,7 +253,7 @@ async function adminLogin() {
     u.depositRequests.forEach((r, i) => {
       requestsHtml += `
       <div class="admin-request">
-        <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
+        <p><b>المستخدم:</b> ${u.name} | ${u.email} | ${u.phone}</p>
         <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
         <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
         <div style="display:flex;gap:10px;">
@@ -250,9 +277,9 @@ async function approveDeposit(email, index) {
   if (!user) return;
   let req = user.depositRequests[index];
   user.balance += req.amount;
+  user.taskDeposits[user.tasksCompleted] += req.amount; // إضافة للإيداع المطلوب
   user.depositRequests.splice(index, 1);
   await updateData();
-  await readData();
   adminLogin();
 }
 
@@ -261,7 +288,6 @@ async function rejectDeposit(email, index) {
   if (!user) return;
   user.depositRequests.splice(index, 1);
   await updateData();
-  await readData();
   adminLogin();
 }
 
