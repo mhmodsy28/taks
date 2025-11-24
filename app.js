@@ -4,7 +4,7 @@ const MASTER_KEY = "$2a$10$/t1IpK/lNiB1ZETNBs/YAeUJoTPK/iC9Q1Mm60zlKCH7OdbWCSti.
 const API_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
 
 // ==== بيانات التطبيق ====
-let currentUser = null;
+let currentUser = JSON.parse(localStorage.getItem("taskUser")) || null;
 let adminPassword = "aalmwt10";
 
 // ==== قراءة البيانات من Bin ====
@@ -88,6 +88,7 @@ async function register() {
   };
   data.users.push(currentUser);
   await updateData(data);
+  localStorage.setItem("taskUser", JSON.stringify(currentUser));
   homePage();
 }
 
@@ -113,6 +114,7 @@ async function login() {
   if (!user) { alert("بيانات غير صحيحة"); return; }
 
   currentUser = user;
+  localStorage.setItem("taskUser", JSON.stringify(currentUser));
   homePage();
 }
 
@@ -187,6 +189,7 @@ async function checkDeposit(index, dep, rew) {
     await updateData(data);
   }
 
+  localStorage.setItem("taskUser", JSON.stringify(currentUser));
   alert("✅ تم تنفيذ المهمة وتم إضافة الأرباح!");
   homePage();
 }
@@ -231,6 +234,7 @@ async function submitDeposit() {
       await updateData(data);
     }
 
+    localStorage.setItem("taskUser", JSON.stringify(currentUser));
     alert("✅ تم إرسال طلب الإيداع للموافقة عليه من قبل الإدارة");
     homePage();
   }
@@ -242,7 +246,7 @@ async function adminLogin() {
   let pwd = prompt("ادخل كلمة مرور الادمن:");
   if (pwd !== adminPassword) { alert("كلمة مرور خاطئة"); return; }
 
-  showHeader(false);
+  showHeader(true);
   let data = await readData();
   let requestsHtml = "";
 
@@ -273,7 +277,7 @@ async function adminLogin() {
   </div>`;
 }
 
-// ==== قبول طلب الإيداع ====
+// ==== قبول/رفض طلب الإيداع ====
 async function approveDeposit(email, index) {
   let data = await readData();
   let user = data.users.find(u => u.email === email);
@@ -287,10 +291,10 @@ async function approveDeposit(email, index) {
   await updateData(data);
 
   if (currentUser && currentUser.email === email) currentUser = user;
+  localStorage.setItem("taskUser", JSON.stringify(currentUser));
   adminLogin();
 }
 
-// ==== رفض طلب الإيداع ====
 async function rejectDeposit(email, index) {
   let data = await readData();
   let user = data.users.find(u => u.email === email);
@@ -343,6 +347,7 @@ async function submitWithdraw() {
     await updateData(data);
   }
 
+  localStorage.setItem("taskUser", JSON.stringify(currentUser));
   alert(`✅ تم سحب ${amount}$ بنجاح`);
   homePage();
 }
@@ -367,7 +372,21 @@ async function accountPage() {
 }
 
 // ==== تسجيل الخروج ====
-function logout() { currentUser = null; showHeader(false); loginPage(); }
+function logout() { 
+  currentUser = null; 
+  localStorage.removeItem("taskUser");
+  showHeader(false); 
+  loginPage(); 
+}
 
-// ==== بدء التطبيق ====
-loginPage();
+// ==== بدء التطبيق وحفظ الجلسة ====
+(async function initApp() {
+  let data = await readData();
+  if (currentUser) {
+    let user = data.users.find(u => u.email === currentUser.email);
+    if (user) currentUser = user;
+    homePage();
+  } else {
+    loginPage();
+  }
+})();
