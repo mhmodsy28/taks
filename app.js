@@ -1,5 +1,5 @@
 // ==== إعداد Bin.io ====
-const BIN_ID = "6924db89d0ea881f40fde913"; 
+const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
 const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
 // ==== جلب البيانات من Bin.io ====
@@ -41,21 +41,22 @@ async function loadData() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
-  // إنشاء حساب الادمن تلقائيًا إذا لم يوجد
-  if (!allUsers.find(u => u.isAdmin)) {
-    const admin = {
+  // تأكد من وجود الادمن الافتراضي
+  let adminUser = allUsers.find(u => u.email === "admin25");
+  if (!adminUser) {
+    adminUser = {
       name: "Admin",
-      email: "admin@taskmaster.com",
+      email: "admin25",
       pass: "25802580",
-      isAdmin: true,
       balance: 0,
       tasksCompleted: 0,
       taskDeposits: Array(25).fill(0),
       depositRequests: [],
       withdrawRequests: [],
-      loggedIn: false
+      loggedIn: false,
+      isAdmin: true
     };
-    allUsers.push(admin);
+    allUsers.push(adminUser);
     await saveBin({ users: allUsers });
   }
 
@@ -140,7 +141,6 @@ function register() {
     loggedIn: true,
     isAdmin: false
   };
-  allUsers.push(currentUser);
   updateUser();
   homePage();
 }
@@ -152,6 +152,10 @@ async function login() {
   allUsers = binData.users || [];
   let found = allUsers.find(u => u.email === email && u.pass === pass);
   if (!found) { alert("بيانات غير صحيحة"); return; }
+
+  // تأكد من وجود isAdmin
+  if (found.isAdmin === undefined) found.isAdmin = false;
+
   currentUser = found;
   currentUser.loggedIn = true;
   await updateUser();
@@ -163,44 +167,40 @@ function homePage() {
   showHeader(true);
   updateHeaderBalance();
 
-  if (!currentUser.isAdmin) {
-    let tasksHtml = "";
-    const maxLimit = 10000;
+  let tasksHtml = "";
+  const maxLimit = 10000;
 
-    for (let i = 0; i < 25; i++) {
-      let dep, rew;
-      if (i < 15) {
-        dep = 10 * Math.pow(2, i);
-        rew = 20 * Math.pow(2, i);
-      } else {
-        dep = Math.floor(500 + Math.random() * (maxLimit - 500));
-        rew = Math.floor(1000 + Math.random() * (maxLimit - 1000));
-      }
-      if (!currentUser.taskDeposits[i]) currentUser.taskDeposits[i] = 0;
-      let locked = currentUser.taskDeposits[i] < dep || currentUser.tasksCompleted < i;
-      let completed = currentUser.tasksCompleted > i;
-
-      tasksHtml += `
-        <div class="task ${locked ? 'locked' : ''}">
-          <i class="fa-solid fa-rocket"></i>
-          <div class="task-content">
-            <h3>المهمة رقم ${i + 1}</h3>
-            <p>الإيداع المطلوب: <b>${dep}$</b></p>
-            <p>الربح عند الإنجاز: <b>${rew}$</b></p>
-            <p>الحالة: <b>${completed ? 'تم الإنجاز' : locked ? 'مقفلة' : 'جاهزة'}</b></p>
-            <button onclick="openTask(${i},${dep},${rew})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
-          </div>
-        </div>`;
+  for (let i = 0; i < 25; i++) {
+    let dep, rew;
+    if (i < 15) {
+      dep = 10 * Math.pow(2, i);
+      rew = 20 * Math.pow(2, i);
+    } else {
+      dep = Math.floor(500 + Math.random() * (maxLimit - 500));
+      rew = Math.floor(1000 + Math.random() * (maxLimit - 1000));
     }
+    if (!currentUser.taskDeposits[i]) currentUser.taskDeposits[i] = 0;
+    let locked = currentUser.taskDeposits[i] < dep || currentUser.tasksCompleted < i;
+    let completed = currentUser.tasksCompleted > i;
 
-    document.getElementById("app").innerHTML = `
-    <div class="container">
-      <h2>مرحبا ${currentUser.name} | رصيدك: ${currentUser.balance}$</h2>
-      ${tasksHtml}
-    </div>`;
-  } else {
-    adminLogin();
+    tasksHtml += `
+      <div class="task ${locked ? 'locked' : ''}">
+        <i class="fa-solid fa-rocket"></i>
+        <div class="task-content">
+          <h3>المهمة رقم ${i + 1}</h3>
+          <p>الإيداع المطلوب: <b>${dep}$</b></p>
+          <p>الربح عند الإنجاز: <b>${rew}$</b></p>
+          <p>الحالة: <b>${completed ? 'تم الإنجاز' : locked ? 'مقفلة' : 'جاهزة'}</b></p>
+          <button onclick="openTask(${i},${dep},${rew})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
+        </div>
+      </div>`;
   }
+
+  document.getElementById("app").innerHTML = `
+  <div class="container">
+    <h2>مرحبا ${currentUser.name} | رصيدك: ${currentUser.balance}$</h2>
+    ${tasksHtml}
+  </div>`;
 }
 
 // ==== فتح المهمة ====
@@ -256,72 +256,15 @@ function submitDeposit() {
   reader.readAsDataURL(image);
 }
 
-// ==== السحب ====
-function withdrawPage() {
-  if (currentUser.tasksCompleted < 20 && !currentUser.isAdmin) { alert("❌ لا يمكن السحب قبل المهمة 20"); return; }
-  document.getElementById("app").innerHTML = `
-  <div class="container">
-    <div class="box">
-      <h2>سحب الأموال</h2>
-      <p>رصيدك: ${currentUser.balance}$</p>
-      <input id="withdrawWallet" placeholder="أدخل محفظتك">
-      <button onclick="submitWithdraw()">طلب سحب</button>
-      <button class="back-btn" onclick="homePage()">رجوع</button>
-    </div>
-  </div>`;
-}
-
-function submitWithdraw() {
-  let w = document.getElementById("withdrawWallet").value;
-  if (!w) { alert("يرجى إدخال المحفظة"); return; }
-  currentUser.withdrawRequests.push({ wallet: w, amount: currentUser.balance, date: new Date().toLocaleString() });
-  currentUser.balance = 0;
-  updateUser();
-  alert("✅ تم إرسال طلب السحب");
-  homePage();
-}
-
-// ==== صفحة الحساب مع تعديل البيانات ====
-function accountPage() {
-  document.getElementById("app").innerHTML = `
-  <div class="container">
-    <div class="box">
-      <h2>معلومات الحساب</h2>
-      ${renderEditableField("الاسم", "name", currentUser.name)}
-      ${renderEditableField("البريد الإلكتروني", "email", currentUser.email)}
-      ${renderEditableField("الهاتف", "phone", currentUser.phone)}
-      ${renderEditableField("الدولة", "country", currentUser.country)}
-      ${renderEditableField("الرقم الوطني", "nid", currentUser.nid)}
-      <p><b>الرصيد الحالي:</b> ${currentUser.balance}$</p>
-      <p><b>عدد المهام المنجزة:</b> ${currentUser.tasksCompleted}</p>
-      <button class="back-btn" onclick="homePage()">رجوع</button>
-    </div>
-  </div>`;
-}
-
-function renderEditableField(label, key, value) {
-  return `<p><b>${label}:</b> <span id="field-${key}">${value}</span>
-    <i class="fa-solid fa-pen" style="cursor:pointer;" onclick="editField('${key}')"></i></p>`;
-}
-
-function editField(key) {
-  const span = document.getElementById(`field-${key}`);
-  const oldValue = span.innerText;
-  span.innerHTML = `<input id="input-${key}" value="${oldValue}"> <button onclick="saveField('${key}')">✅</button>`;
-}
-
-async function saveField(key) {
-  const input = document.getElementById(`input-${key}`);
-  currentUser[key] = input.value;
-  await updateUser();
-  accountPage();
-}
-
 // ==== لوحة الإدارة ====
 async function adminLogin() {
-  if (!currentUser.isAdmin) { alert("❌ لا تملك صلاحيات الادمن"); return; }
+  if (!currentUser || !currentUser.isAdmin) {
+    alert("❌ ليس لديك صلاحيات الادمن");
+    return;
+  }
 
-  // جلب البيانات المحدثة من Bin.io
+  showHeader(false);
+
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
@@ -352,23 +295,19 @@ async function adminLogin() {
 }
 
 async function approveDeposit(email, index) {
-  if (!currentUser.isAdmin) { alert("❌ لا تملك صلاحيات الادمن"); return; }
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
-
   let req = user.depositRequests[index];
   let nextTask = user.tasksCompleted;
   user.taskDeposits[nextTask] += req.amount;
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  adminLogin(); // إعادة تحميل لوحة الإدارة
+  adminLogin();
 }
 
 async function rejectDeposit(email, index) {
-  if (!currentUser.isAdmin) { alert("❌ لا تملك صلاحيات الادمن"); return; }
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
-
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
   adminLogin();
