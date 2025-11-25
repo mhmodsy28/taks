@@ -1,18 +1,17 @@
 // ==== إعداد Bin.io ====
-const BIN_ID = "6924db89d0ea881f40fde913"; 
+const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
 const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
-// ==== تحميل وحفظ Bin.io ====
 async function fetchBin() {
   try {
     const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
       headers: { "X-Master-Key": MASTER_KEY }
     });
     const data = await res.json();
-    return data.record;
+    return data.record || { users: [] };
   } catch (err) {
     console.error("خطأ في جلب البيانات من Bin.io", err);
-    return { users: [], depositRequests: [] };
+    return { users: [] };
   }
 }
 
@@ -31,17 +30,33 @@ async function saveBin(record) {
   }
 }
 
-// ==== البيانات الأساسية ====
+// ==== بيانات المستخدمين ====
 let currentUser = null;
 let allUsers = [];
-let depositRequests = [];
 
-// ==== تحميل البيانات ====
+// ==== تحميل البيانات من Bin.io + إنشاء حساب أدمن دائم ====
 async function loadData() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
-  depositRequests = binData.depositRequests || [];
 
+  // إنشاء حساب الأدمن إذا لم يوجد
+  let adminUser = allUsers.find(u => u.email === "admin25@example.com");
+  if (!adminUser) {
+    adminUser = {
+      name: "Admin",
+      email: "admin25@example.com",
+      pass: "25802580",
+      balance: 0,
+      tasksCompleted: 25,
+      taskDeposits: Array(25).fill(0),
+      depositRequests: [],
+      withdrawRequests: []
+    };
+    allUsers.push(adminUser);
+    await saveBin({ users: allUsers });
+  }
+
+  // محاولة تسجيل الدخول تلقائياً من localStorage
   const storedEmail = localStorage.getItem("currentUserEmail");
   if (storedEmail) {
     currentUser = allUsers.find(u => u.email === storedEmail) || null;
@@ -50,20 +65,18 @@ async function loadData() {
   currentUser ? homePage() : loginPage();
 }
 
-// ==== تحديث البيانات ====
+// ==== تحديث Bin.io ====
 async function updateUser() {
   if (!currentUser) return;
-
   const idx = allUsers.findIndex(u => u.email === currentUser.email);
   if (idx !== -1) allUsers[idx] = currentUser;
   else allUsers.push(currentUser);
-
-  await saveBin({ users: allUsers, depositRequests });
-  updateHeaderBalance();
+  await saveBin({ users: allUsers });
   localStorage.setItem("currentUserEmail", currentUser.email);
+  updateHeaderBalance();
 }
 
-// ==== تحديث الرصيد في الهيدر ====
+// ==== عرض الرصيد في الهيدر ====
 function updateHeaderBalance() {
   if (currentUser) document.getElementById("balanceDisplay").innerText = currentUser.balance;
 }
@@ -73,7 +86,7 @@ function showHeader(show) {
   document.getElementById("header").style.display = show ? "flex" : "none";
 }
 
-// ==== تسجيل الدخول / تسجيل جديد ====
+// ==== تسجيل الدخول / إنشاء حساب ====
 function loginPage() {
   showHeader(false);
   document.getElementById("app").innerHTML = `
@@ -115,30 +128,32 @@ function register() {
   let country = document.getElementById("regCountry").value;
   let pass = document.getElementById("regPass").value;
 
-  if (!name || !email || !nid || !phone || !pass) { alert("يرجى ملء جميع الحقول"); return; }
+  if (!name || !email || !nid || !phone || !pass) {
+    alert("يرجى ملء جميع الحقول"); return;
+  }
 
   currentUser = {
     name, email, nid, phone, country, pass,
     balance: 0,
     tasksCompleted: 0,
     taskDeposits: Array(25).fill(0),
-    withdrawRequests: []
+    depositRequests: [],
+    withdrawRequests: [],
+    loggedIn: true
   };
-
   allUsers.push(currentUser);
-  localStorage.setItem("currentUserEmail", email);
   updateUser();
   homePage();
 }
 
-function login() {
+async function login() {
   let email = document.getElementById("loginEmail").value;
   let pass = document.getElementById("loginPass").value;
-  let user = allUsers.find(u => u.email === email && u.pass === pass);
-  if (!user) { alert("بيانات غير صحيحة"); return; }
-  currentUser = user;
-  localStorage.setItem("currentUserEmail", email);
-  updateUser();
+  let found = allUsers.find(u => u.email === email && u.pass === pass);
+  if (!found) { alert("بيانات غير صحيحة"); return; }
+  currentUser = found;
+  currentUser.loggedIn = true;
+  await updateUser();
   homePage();
 }
 
@@ -229,16 +244,9 @@ function submitDeposit() {
   let amount = parseFloat(document.getElementById("depositAmount").value);
   let image = document.getElementById("depositImage").files[0];
   if (!amount || !image) { alert("يرجى إدخال المبلغ ورفع الصورة"); return; }
-
   let reader = new FileReader();
   reader.onload = function () {
-    depositRequests.push({
-      userEmail: currentUser.email,
-      userName: currentUser.name,
-      amount,
-      image: reader.result,
-      date: new Date().toLocaleString()
-    });
+    currentUser.depositRequests.push({ amount, image: reader.result, date: new Date().toLocaleString() });
     updateUser();
     alert("✅ تم إرسال طلب الإيداع");
     homePage();
@@ -271,7 +279,7 @@ function submitWithdraw() {
   homePage();
 }
 
-// ==== صفحة الحساب ====
+// ==== صفحة الحساب مع تعديل البيانات ====
 function accountPage() {
   document.getElementById("app").innerHTML = `
   <div class="container">
@@ -309,58 +317,68 @@ async function saveField(key) {
 
 // ==== لوحة الإدارة ====
 async function adminLogin() {
-  const pwd = prompt("ادخل كلمة مرور الأدمن:");
-  if (pwd !== "25802580") { alert("كلمة مرور خاطئة"); return; }
+  if (currentUser.email !== "admin25@example.com") {
+    alert("❌ ليس لديك صلاحية الإدارة"); 
+    return; 
+  }
 
   showHeader(false);
 
-  let html = "";
-  depositRequests.forEach((req, i) => {
-    html += `
-      <div class="admin-request">
-        <p><b>المستخدم:</b> ${req.userName} | ${req.userEmail}</p>
-        <p><b>المبلغ:</b> ${req.amount}$ | التاريخ: ${req.date}</p>
-        <img src="${req.image}" style="max-width:200px;">
-        <div style="display:flex;gap:10px;">
-          <button onclick="approveDeposit(${i})">✅ قبول</button>
-          <button style="background:red;color:white;" onclick="rejectDeposit(${i})">❌ رفض</button>
-        </div>
-      </div>`;
+  let requestsHtml = "";
+  allUsers.forEach(u => {
+    u.depositRequests.forEach((r, i) => {
+      requestsHtml += `
+        <div class="admin-request">
+          <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
+          <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
+          <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
+          <div style="display:flex;gap:10px;">
+            <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
+            <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
+          </div>
+        </div>`;
+    });
   });
 
   document.getElementById("app").innerHTML = `
     <div class="container">
       <div class="admin-box">
         <h2>طلبات الإيداع</h2>
-        ${html || "<p>لا توجد طلبات حالية</p>"}
+        ${requestsHtml || "<p>لا توجد طلبات حالية</p>"}
         <button class="back-btn" onclick="homePage()">رجوع</button>
       </div>
     </div>`;
 }
 
-async function approveDeposit(index) {
-  let req = depositRequests[index];
-  let user = allUsers.find(u => u.email === req.userEmail);
+async function approveDeposit(email, index) {
+  let user = allUsers.find(u => u.email === email);
   if (!user) return;
 
+  let req = user.depositRequests[index];
   let nextTask = user.tasksCompleted;
   user.taskDeposits[nextTask] += req.amount;
-
-  depositRequests.splice(index, 1);
-  await saveBin({ users: allUsers, depositRequests });
+  user.depositRequests.splice(index, 1);
+  await saveBin({ users: allUsers });
   adminLogin();
 }
 
-async function rejectDeposit(index) {
-  depositRequests.splice(index, 1);
-  await saveBin({ users: allUsers, depositRequests });
+async function rejectDeposit(email, index) {
+  let user = allUsers.find(u => u.email === email);
+  if (!user) return;
+
+  user.depositRequests.splice(index, 1);
+  await saveBin({ users: allUsers });
   adminLogin();
 }
 
 // ==== تسجيل الخروج ====
 async function logout() {
+  if (currentUser) {
+    currentUser.loggedIn = false;
+    localStorage.removeItem("currentUserEmail");
+    await updateUser();
+  }
   currentUser = null;
-  localStorage.removeItem("currentUserEmail");
   showHeader(false);
   loginPage();
 }
