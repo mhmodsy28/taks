@@ -344,7 +344,6 @@ async function adminPanelLogin() {
 
   if (email !== ADMIN_EMAIL || pass !== ADMIN_PASS) { alert("❌ بيانات الادمن غير صحيحة"); return; }
 
-  // جلب البيانات المحدثة من Bin.io
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
@@ -357,8 +356,8 @@ async function adminPanelLogin() {
           <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
           <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
           <div style="display:flex;gap:10px;">
-            <button onclick="approveDeposit('${u.email}')">✅ قبول</button>
-            <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}')">❌ رفض</button>
+            <button onclick="approveDeposit('${u.email}', ${i})">✅ قبول</button>
+            <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}', ${i})">❌ رفض</button>
           </div>
         </div>`;
     });
@@ -374,26 +373,28 @@ async function adminPanelLogin() {
     </div>`;
 }
 
-// ==== الموافقة ورفض الإيداع - نسخة محسنة ====
-async function approveDeposit(email) {
+// ==== الموافقة ورفض الإيداع ====
+async function approveDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
-  if (!user || !user.depositRequests || user.depositRequests.length === 0) return;
+  if (!user) return;
 
-  let req = user.depositRequests[0];
+  let req = user.depositRequests[index];
+  if (!req) return;
+
   let nextTask = user.tasksCompleted;
   if(!user.taskDeposits) user.taskDeposits = Array(25).fill(0);
   user.taskDeposits[nextTask] += req.amount;
 
-  user.depositRequests.shift();
+  user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
   adminPanelLogin();
 }
 
-async function rejectDeposit(email) {
+async function rejectDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
-  if (!user || !user.depositRequests || user.depositRequests.length === 0) return;
+  if (!user) return;
 
-  user.depositRequests.shift();
+  user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
   adminPanelLogin();
 }
