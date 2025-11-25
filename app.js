@@ -147,7 +147,13 @@ async function register() {
     loggedIn: true,
     isAdmin: false
   };
-  await updateUser();
+
+  // إضافة المستخدم إلى allUsers
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
+  allUsers.push(currentUser);
+  await saveBin({ users: allUsers });
+
   homePage();
 }
 
@@ -252,78 +258,35 @@ function submitDeposit() {
   let amount = parseFloat(document.getElementById("depositAmount").value);
   let image = document.getElementById("depositImage").files[0];
   if (!amount || !image) { alert("يرجى إدخال المبلغ ورفع الصورة"); return; }
+
   let reader = new FileReader();
   reader.onload = async function () {
-    currentUser.depositRequests.push({ amount, image: reader.result, date: new Date().toLocaleString() });
-    await updateUser();
+    const binData = await fetchBin();
+    allUsers = binData.users || [];
+
+    let userIndex = allUsers.findIndex(u => u.email === currentUser.email);
+    if (userIndex === -1) {
+      allUsers.push(currentUser);
+      userIndex = allUsers.length - 1;
+    }
+
+    if (!allUsers[userIndex].depositRequests) allUsers[userIndex].depositRequests = [];
+    allUsers[userIndex].depositRequests.push({ 
+      amount, 
+      image: reader.result, 
+      date: new Date().toLocaleString() 
+    });
+
+    currentUser.depositRequests = allUsers[userIndex].depositRequests;
+
+    await saveBin({ users: allUsers });
     alert("✅ تم إرسال طلب الإيداع");
     homePage();
   }
   reader.readAsDataURL(image);
 }
 
-// ==== السحب ====
-function withdrawPage() {
-  if (currentUser.tasksCompleted < 20) { alert("❌ لا يمكن السحب قبل المهمة 20"); return; }
-  document.getElementById("app").innerHTML = `
-  <div class="container">
-    <div class="box">
-      <h2>سحب الأموال</h2>
-      <p>رصيدك: ${currentUser.balance}$</p>
-      <input id="withdrawWallet" placeholder="أدخل محفظتك">
-      <button onclick="submitWithdraw()">طلب سحب</button>
-      <button class="back-btn" onclick="homePage()">رجوع</button>
-    </div>
-  </div>`;
-}
-
-function submitWithdraw() {
-  let w = document.getElementById("withdrawWallet").value;
-  if (!w) { alert("يرجى إدخال المحفظة"); return; }
-  currentUser.withdrawRequests.push({ wallet: w, amount: currentUser.balance, date: new Date().toLocaleString() });
-  currentUser.balance = 0;
-  updateUser();
-  alert("✅ تم إرسال طلب السحب");
-  homePage();
-}
-
-// ==== صفحة الحساب مع تعديل البيانات ====
-function accountPage() {
-  document.getElementById("app").innerHTML = `
-  <div class="container">
-    <div class="box">
-      <h2>معلومات الحساب</h2>
-      ${renderEditableField("الاسم", "name", currentUser.name)}
-      ${renderEditableField("البريد الإلكتروني", "email", currentUser.email)}
-      ${renderEditableField("الهاتف", "phone", currentUser.phone)}
-      ${renderEditableField("الدولة", "country", currentUser.country)}
-      ${renderEditableField("الرقم الوطني", "nid", currentUser.nid)}
-      <p><b>الرصيد الحالي:</b> ${currentUser.balance}$</p>
-      <p><b>عدد المهام المنجزة:</b> ${currentUser.tasksCompleted}</p>
-      <button class="back-btn" onclick="homePage()">رجوع</button>
-    </div>
-  </div>`;
-}
-
-function renderEditableField(label, key, value) {
-  return `<p><b>${label}:</b> <span id="field-${key}">${value}</span>
-    <i class="fa-solid fa-pen" style="cursor:pointer;" onclick="editField('${key}')"></i></p>`;
-}
-
-function editField(key) {
-  const span = document.getElementById(`field-${key}`);
-  const oldValue = span.innerText;
-  span.innerHTML = `<input id="input-${key}" value="${oldValue}"> <button onclick="saveField('${key}')">✅</button>`;
-}
-
-async function saveField(key) {
-  const input = document.getElementById(`input-${key}`);
-  currentUser[key] = input.value;
-  await updateUser();
-  accountPage();
-}
-
-// ==== لوحة الإدارة: نموذج تسجيل دخول الادمن ====
+// ==== لوحة الإدارة: تسجيل دخول الادمن ====
 function adminLogin() {
   document.getElementById("app").innerHTML = `
   <div class="container">
@@ -337,26 +300,18 @@ function adminLogin() {
   </div>`;
 }
 
-// ==== التحقق من بيانات الادمن وفتح لوحة الإيداعات ====
 async function adminPanelLogin() {
   const email = document.getElementById("adminEmail").value;
   const pass = document.getElementById("adminPass").value;
 
   if (email !== ADMIN_EMAIL || pass !== ADMIN_PASS) { alert("❌ بيانات الادمن غير صحيحة"); return; }
 
-  // جلب البيانات المحدثة من Bin.io
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
-  // حماية من البيانات المفقودة
-  allUsers.forEach(u => {
-    if (!u.depositRequests) u.depositRequests = [];
-    if (!u.taskDeposits) u.taskDeposits = Array(25).fill(0);
-  });
-
   let requestsHtml = "";
   allUsers.forEach(u => {
-    if(u.depositRequests.length > 0){
+    if(u.depositRequests && u.depositRequests.length > 0){
       u.depositRequests.forEach((r, i) => {
         requestsHtml += `
           <div class="admin-request">
