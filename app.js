@@ -120,11 +120,12 @@ function homePage() {
   let tasksHtml = "";
   let depositAmount = 10;
   let reward = 20;
+  const maxLimit = 10000;
 
   for (let i = 0; i < 25; i++) {
-    let maxLimit = 10000;
     let locked = currentUser.taskDeposits[i] < depositAmount || currentUser.tasksCompleted < i;
     let completed = currentUser.tasksCompleted > i;
+
     tasksHtml += `
       <div class="task ${locked ? 'locked' : ''}">
         <i class="fa-solid fa-rocket"></i>
@@ -136,9 +137,15 @@ function homePage() {
           <button onclick="openTask(${i},${depositAmount},${reward})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
         </div>
       </div>`;
-    // مضاعفة المبلغ والربح لكل مهمة مختلفة، لا يتجاوز 10000$
-    depositAmount = Math.min(depositAmount * 2 + Math.floor(Math.random()*10), maxLimit);
-    reward = Math.min(reward * 2 + Math.floor(Math.random()*10), maxLimit);
+
+    // توليد مبلغ و ربح مختلف لكل مهمة بشكل منطقي
+    if (i < 14) { // المهام 1-15
+      depositAmount = Math.floor(depositAmount * 1.8 + Math.random() * 10);
+      reward = Math.floor(reward * 1.8 + Math.random() * 10);
+    } else { // المهام 15-25
+      depositAmount = Math.min(Math.floor(depositAmount * 1.5 + Math.random() * 50), maxLimit);
+      reward = Math.min(Math.floor(reward * 1.5 + Math.random() * 50), maxLimit);
+    }
   }
 
   document.getElementById("app").innerHTML = `
@@ -283,9 +290,15 @@ async function approveDeposit(email, index) {
   if (!user) return;
 
   let req = user.depositRequests[index];
-  user.balance += req.amount;
+
+  // إضافة المبلغ للمهمة التالية
+  let nextTask = user.tasksCompleted; 
+  user.taskDeposits[nextTask] = (user.taskDeposits[nextTask] || 0) + req.amount;
+
+  // إزالة الطلب
   user.depositRequests.splice(index, 1);
   await updateData();
+
   if (currentUser.email === email) {
     currentUser = user;
     updateHeaderBalance();
