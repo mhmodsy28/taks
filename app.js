@@ -64,6 +64,8 @@ async function loadData() {
     await saveBin({ users: allUsers });
   } else {
     adminUser.isAdmin = true;
+    if (!Array.isArray(adminUser.depositRequests)) adminUser.depositRequests = [];
+    if (!Array.isArray(adminUser.taskDeposits)) adminUser.taskDeposits = Array(25).fill(0);
   }
 
   // التأكد من أي مستخدم مسجل دخول
@@ -164,6 +166,8 @@ async function login() {
   currentUser = found;
   currentUser.loggedIn = true;
   if (!currentUser.hasOwnProperty("isAdmin")) currentUser.isAdmin = email === ADMIN_EMAIL;
+  if (!Array.isArray(currentUser.depositRequests)) currentUser.depositRequests = [];
+  if (!Array.isArray(currentUser.taskDeposits)) currentUser.taskDeposits = Array(25).fill(0);
   await updateUser();
   homePage();
 }
@@ -344,8 +348,15 @@ async function adminPanelLogin() {
 
   if (email !== ADMIN_EMAIL || pass !== ADMIN_PASS) { alert("❌ بيانات الادمن غير صحيحة"); return; }
 
+  // جلب البيانات المحدثة من Bin.io
   const binData = await fetchBin();
   allUsers = binData.users || [];
+
+  // التأكد من وجود المصفوفات
+  allUsers.forEach(u => {
+    if (!Array.isArray(u.depositRequests)) u.depositRequests = [];
+    if (!Array.isArray(u.taskDeposits)) u.taskDeposits = Array(25).fill(0);
+  });
 
   let requestsHtml = "";
   allUsers.forEach(u => {
@@ -377,14 +388,11 @@ async function adminPanelLogin() {
 async function approveDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
+  if (!Array.isArray(user.taskDeposits)) user.taskDeposits = Array(25).fill(0);
 
   let req = user.depositRequests[index];
-  if (!req) return;
-
   let nextTask = user.tasksCompleted;
-  if(!user.taskDeposits) user.taskDeposits = Array(25).fill(0);
   user.taskDeposits[nextTask] += req.amount;
-
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
   adminPanelLogin();
