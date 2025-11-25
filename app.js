@@ -1,5 +1,5 @@
-ء التطبيق ==loadData();// ==== إعداد Bin.io ====
-const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
+// ==== إعداد Bin.io ====
+const BIN_ID = "6924db89d0ea881f40fde913"; 
 const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
 // ==== جلب البيانات من Bin.io ====
@@ -40,6 +40,24 @@ let allUsers = [];
 async function loadData() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
+
+  // إنشاء حساب الادمن تلقائيًا إذا لم يوجد
+  if (!allUsers.find(u => u.isAdmin)) {
+    const admin = {
+      name: "Admin",
+      email: "admin@taskmaster.com",
+      pass: "25802580",
+      isAdmin: true,
+      balance: 0,
+      tasksCompleted: 0,
+      taskDeposits: Array(25).fill(0),
+      depositRequests: [],
+      withdrawRequests: [],
+      loggedIn: false
+    };
+    allUsers.push(admin);
+    await saveBin({ users: allUsers });
+  }
 
   // البحث عن أي مستخدم مسجل دخول
   const loggedInUser = allUsers.find(u => u.loggedIn);
@@ -119,8 +137,10 @@ function register() {
     taskDeposits: Array(25).fill(0),
     depositRequests: [],
     withdrawRequests: [],
-    loggedIn: true
+    loggedIn: true,
+    isAdmin: false
   };
+  allUsers.push(currentUser);
   updateUser();
   homePage();
 }
@@ -143,40 +163,44 @@ function homePage() {
   showHeader(true);
   updateHeaderBalance();
 
-  let tasksHtml = "";
-  const maxLimit = 10000;
+  if (!currentUser.isAdmin) {
+    let tasksHtml = "";
+    const maxLimit = 10000;
 
-  for (let i = 0; i < 25; i++) {
-    let dep, rew;
-    if (i < 15) {
-      dep = 10 * Math.pow(2, i);
-      rew = 20 * Math.pow(2, i);
-    } else {
-      dep = Math.floor(500 + Math.random() * (maxLimit - 500));
-      rew = Math.floor(1000 + Math.random() * (maxLimit - 1000));
+    for (let i = 0; i < 25; i++) {
+      let dep, rew;
+      if (i < 15) {
+        dep = 10 * Math.pow(2, i);
+        rew = 20 * Math.pow(2, i);
+      } else {
+        dep = Math.floor(500 + Math.random() * (maxLimit - 500));
+        rew = Math.floor(1000 + Math.random() * (maxLimit - 1000));
+      }
+      if (!currentUser.taskDeposits[i]) currentUser.taskDeposits[i] = 0;
+      let locked = currentUser.taskDeposits[i] < dep || currentUser.tasksCompleted < i;
+      let completed = currentUser.tasksCompleted > i;
+
+      tasksHtml += `
+        <div class="task ${locked ? 'locked' : ''}">
+          <i class="fa-solid fa-rocket"></i>
+          <div class="task-content">
+            <h3>المهمة رقم ${i + 1}</h3>
+            <p>الإيداع المطلوب: <b>${dep}$</b></p>
+            <p>الربح عند الإنجاز: <b>${rew}$</b></p>
+            <p>الحالة: <b>${completed ? 'تم الإنجاز' : locked ? 'مقفلة' : 'جاهزة'}</b></p>
+            <button onclick="openTask(${i},${dep},${rew})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
+          </div>
+        </div>`;
     }
-    if (!currentUser.taskDeposits[i]) currentUser.taskDeposits[i] = 0;
-    let locked = currentUser.taskDeposits[i] < dep || currentUser.tasksCompleted < i;
-    let completed = currentUser.tasksCompleted > i;
 
-    tasksHtml += `
-      <div class="task ${locked ? 'locked' : ''}">
-        <i class="fa-solid fa-rocket"></i>
-        <div class="task-content">
-          <h3>المهمة رقم ${i + 1}</h3>
-          <p>الإيداع المطلوب: <b>${dep}$</b></p>
-          <p>الربح عند الإنجاز: <b>${rew}$</b></p>
-          <p>الحالة: <b>${completed ? 'تم الإنجاز' : locked ? 'مقفلة' : 'جاهزة'}</b></p>
-          <button onclick="openTask(${i},${dep},${rew})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
-        </div>
-      </div>`;
+    document.getElementById("app").innerHTML = `
+    <div class="container">
+      <h2>مرحبا ${currentUser.name} | رصيدك: ${currentUser.balance}$</h2>
+      ${tasksHtml}
+    </div>`;
+  } else {
+    adminLogin();
   }
-
-  document.getElementById("app").innerHTML = `
-  <div class="container">
-    <h2>مرحبا ${currentUser.name} | رصيدك: ${currentUser.balance}$</h2>
-    ${tasksHtml}
-  </div>`;
 }
 
 // ==== فتح المهمة ====
@@ -234,7 +258,7 @@ function submitDeposit() {
 
 // ==== السحب ====
 function withdrawPage() {
-  if (currentUser.tasksCompleted < 20) { alert("❌ لا يمكن السحب قبل المهمة 20"); return; }
+  if (currentUser.tasksCompleted < 20 && !currentUser.isAdmin) { alert("❌ لا يمكن السحب قبل المهمة 20"); return; }
   document.getElementById("app").innerHTML = `
   <div class="container">
     <div class="box">
@@ -295,10 +319,7 @@ async function saveField(key) {
 
 // ==== لوحة الإدارة ====
 async function adminLogin() {
-  const pwd = prompt("ادخل كلمة مرور الأدمن:");
-  if (pwd !== "25802580") { alert("كلمة مرور خاطئة"); return; }
-
-  showHeader(false);
+  if (!currentUser.isAdmin) { alert("❌ لا تملك صلاحيات الادمن"); return; }
 
   // جلب البيانات المحدثة من Bin.io
   const binData = await fetchBin();
@@ -331,6 +352,7 @@ async function adminLogin() {
 }
 
 async function approveDeposit(email, index) {
+  if (!currentUser.isAdmin) { alert("❌ لا تملك صلاحيات الادمن"); return; }
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
 
@@ -343,6 +365,7 @@ async function approveDeposit(email, index) {
 }
 
 async function rejectDeposit(email, index) {
+  if (!currentUser.isAdmin) { alert("❌ لا تملك صلاحيات الادمن"); return; }
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
 
