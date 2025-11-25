@@ -73,12 +73,18 @@ async function loadData() {
   currentUser ? homePage() : loginPage();
 }
 
-// ==== تحديث Bin.io ====
+// ==== تحديث Bin.io (مع جلب آخر نسخة أولاً) ====
 async function updateUser() {
   if (!currentUser) return;
+
+  // جلب آخر نسخة من Bin.io قبل الحفظ
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
+
   const idx = allUsers.findIndex(u => u.email === currentUser.email);
   if (idx !== -1) allUsers[idx] = currentUser;
   else allUsers.push(currentUser);
+
   await saveBin({ users: allUsers });
   updateHeaderBalance();
 }
@@ -148,7 +154,7 @@ async function register() {
     isAdmin: false
   };
 
-  // إضافة المستخدم إلى allUsers
+  // جلب آخر نسخة قبل الإضافة
   const binData = await fetchBin();
   allUsers = binData.users || [];
   allUsers.push(currentUser);
@@ -215,30 +221,7 @@ function homePage() {
   </div>`;
 }
 
-// ==== فتح المهمة ====
-function openTask(index, dep, rew) {
-  document.getElementById("app").innerHTML = `
-  <div class="container">
-    <div class="box">
-      <h2>المهمة رقم ${index + 1}</h2>
-      <p>المطلوب قبل التنفيذ: إيداع ${dep}$</p>
-      <p>ربحك بعد الإنجاز: ${rew}$</p>
-      <button onclick="checkDeposit(${index},${dep},${rew})">تنفيذ المهمة</button>
-      <button class="back-btn" onclick="homePage()">رجوع</button>
-    </div>
-  </div>`;
-}
-
-function checkDeposit(index, dep, rew) {
-  if (currentUser.taskDeposits[index] < dep) { alert(`❌ لا يمكن تنفيذ المهمة بدون إيداع ${dep}$`); return; }
-  currentUser.balance += rew;
-  currentUser.tasksCompleted = Math.max(currentUser.tasksCompleted, index + 1);
-  updateUser();
-  alert("✅ تم تنفيذ المهمة وتم إضافة الأرباح!");
-  homePage();
-}
-
-// ==== الايداع ====
+// ==== الايداع (محدث للعمل من أي جهاز) ====
 function depositPage() {
   document.getElementById("app").innerHTML = `
   <div class="container">
@@ -261,6 +244,7 @@ function submitDeposit() {
 
   let reader = new FileReader();
   reader.onload = async function () {
+    // جلب آخر نسخة من Bin.io
     const binData = await fetchBin();
     allUsers = binData.users || [];
 
@@ -271,10 +255,10 @@ function submitDeposit() {
     }
 
     if (!allUsers[userIndex].depositRequests) allUsers[userIndex].depositRequests = [];
-    allUsers[userIndex].depositRequests.push({ 
-      amount, 
-      image: reader.result, 
-      date: new Date().toLocaleString() 
+    allUsers[userIndex].depositRequests.push({
+      amount,
+      image: reader.result,
+      date: new Date().toLocaleString()
     });
 
     currentUser.depositRequests = allUsers[userIndex].depositRequests;
@@ -286,7 +270,7 @@ function submitDeposit() {
   reader.readAsDataURL(image);
 }
 
-// ==== لوحة الإدارة: تسجيل دخول الادمن ====
+// ==== لوحة الادمن ====
 function adminLogin() {
   document.getElementById("app").innerHTML = `
   <div class="container">
@@ -339,6 +323,9 @@ async function adminPanelLogin() {
 
 // ==== الموافقة ورفض الإيداع ====
 async function approveDeposit(email, index) {
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
+
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
 
@@ -351,6 +338,9 @@ async function approveDeposit(email, index) {
 }
 
 async function rejectDeposit(email, index) {
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
+
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
 
