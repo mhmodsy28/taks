@@ -8,7 +8,7 @@ async function fetchBin() {
       headers: { "X-Master-Key": MASTER_KEY }
     });
     const data = await res.json();
-    return data.record || { users: [] };
+    return data.record;
   } catch (err) {
     console.error("خطأ في جلب البيانات من Bin.io", err);
     return { users: [] };
@@ -34,33 +34,33 @@ async function saveBin(record) {
 let currentUser = null;
 let allUsers = [];
 
-// ==== تحميل البيانات من Bin.io + إنشاء حساب أدمن دائم ====
+// ==== تحميل البيانات من Bin.io ====
 async function loadData() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
-  // إنشاء حساب الأدمن إذا لم يوجد
-  let adminUser = allUsers.find(u => u.email === "admin25@example.com");
-  if (!adminUser) {
-    adminUser = {
-      name: "Admin",
+  // إنشاء حساب الأدمن إذا لم يكن موجودًا
+  let admin = allUsers.find(u => u.email === "admin25@example.com");
+  if (!admin) {
+    admin = {
+      name: "Admin25",
       email: "admin25@example.com",
       pass: "25802580",
       balance: 0,
-      tasksCompleted: 25,
+      tasksCompleted: 0,
       taskDeposits: Array(25).fill(0),
       depositRequests: [],
-      withdrawRequests: []
+      withdrawRequests: [],
+      loggedIn: false,
+      isAdmin: true
     };
-    allUsers.push(adminUser);
+    allUsers.push(admin);
     await saveBin({ users: allUsers });
   }
 
-  // محاولة تسجيل الدخول تلقائياً من localStorage
-  const storedEmail = localStorage.getItem("currentUserEmail");
-  if (storedEmail) {
-    currentUser = allUsers.find(u => u.email === storedEmail) || null;
-  }
+  // البحث عن أي مستخدم مسجل دخول
+  const loggedInUser = allUsers.find(u => u.loggedIn);
+  if (loggedInUser) currentUser = loggedInUser;
 
   currentUser ? homePage() : loginPage();
 }
@@ -72,7 +72,6 @@ async function updateUser() {
   if (idx !== -1) allUsers[idx] = currentUser;
   else allUsers.push(currentUser);
   await saveBin({ users: allUsers });
-  localStorage.setItem("currentUserEmail", currentUser.email);
   updateHeaderBalance();
 }
 
@@ -139,7 +138,8 @@ function register() {
     taskDeposits: Array(25).fill(0),
     depositRequests: [],
     withdrawRequests: [],
-    loggedIn: true
+    loggedIn: true,
+    isAdmin: false
   };
   allUsers.push(currentUser);
   updateUser();
@@ -317,8 +317,9 @@ async function saveField(key) {
 
 // ==== لوحة الإدارة ====
 async function adminLogin() {
-  if (currentUser.email !== "admin25@example.com") {
-    alert("❌ ليس لديك صلاحية الإدارة"); 
+  const pwd = prompt("ادخل كلمة مرور الادمن:");
+  if (!currentUser || currentUser.email !== "admin25@example.com" || pwd !== "25802580") { 
+    alert("كلمة مرور خاطئة"); 
     return; 
   }
 
@@ -359,7 +360,7 @@ async function approveDeposit(email, index) {
   user.taskDeposits[nextTask] += req.amount;
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  adminLogin();
+  adminLogin(); // العودة للوحة الإدارة بعد القبول
 }
 
 async function rejectDeposit(email, index) {
@@ -368,14 +369,13 @@ async function rejectDeposit(email, index) {
 
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  adminLogin();
+  adminLogin(); // العودة للوحة الإدارة بعد الرفض
 }
 
 // ==== تسجيل الخروج ====
 async function logout() {
   if (currentUser) {
     currentUser.loggedIn = false;
-    localStorage.removeItem("currentUserEmail");
     await updateUser();
   }
   currentUser = null;
