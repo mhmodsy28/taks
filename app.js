@@ -2,8 +2,8 @@
 let currentUser = null;
 let allUsers = [];
 const adminPassword = "aalmwt10";
-const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
-const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2"; // ضع Master Key هنا
+const BIN_ID = "6924db89d0ea881f40fde913";
+const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
 // ==== دوال Bin.io ====
 async function readData() {
@@ -23,6 +23,13 @@ async function updateData() {
     },
     body: JSON.stringify({ allUsers })
   });
+}
+
+// ==== تحديث الرصيد في الهيدر ====
+function updateHeaderBalance() {
+  if(currentUser){
+    document.getElementById("balanceDisplay").innerText = currentUser.balance;
+  }
 }
 
 // ==== عرض الهيدر ====
@@ -88,6 +95,7 @@ async function register() {
 
   allUsers.push(currentUser);
   await updateData();
+  localStorage.setItem("taskUserEmail", currentUser.email);
   homePage();
 }
 
@@ -100,17 +108,21 @@ async function login() {
   if (!found) { alert("بيانات غير صحيحة"); return; }
 
   currentUser = found;
+  localStorage.setItem("taskUserEmail", currentUser.email);
   homePage();
 }
 
 // ==== الصفحة الرئيسية + المهام ====
 function homePage() {
   showHeader(true);
-  let tasksHtml = "";
-  let depositAmount = 15;
-  let reward = 30;
+  updateHeaderBalance();
 
-  for (let i = 14; i < 25; i++) { // المهام من 15 إلى 25
+  let tasksHtml = "";
+  let depositAmount = 10;
+  let reward = 20;
+
+  for (let i = 0; i < 25; i++) {
+    let maxLimit = 10000;
     let locked = currentUser.taskDeposits[i] < depositAmount || currentUser.tasksCompleted < i;
     let completed = currentUser.tasksCompleted > i;
     tasksHtml += `
@@ -124,8 +136,9 @@ function homePage() {
           <button onclick="openTask(${i},${depositAmount},${reward})" ${locked || completed ? 'disabled' : ''}>تنفيذ المهمة</button>
         </div>
       </div>`;
-    depositAmount = Math.min(depositAmount * 2, 10000);
-    reward = Math.min(reward * 2, 10000);
+    // مضاعفة المبلغ والربح لكل مهمة مختلفة، لا يتجاوز 10000$
+    depositAmount = Math.min(depositAmount * 2 + Math.floor(Math.random()*10), maxLimit);
+    reward = Math.min(reward * 2 + Math.floor(Math.random()*10), maxLimit);
   }
 
   document.getElementById("app").innerHTML = `
@@ -157,6 +170,7 @@ async function checkDeposit(index, dep, rew) {
   currentUser.balance += rew;
   currentUser.tasksCompleted = Math.max(currentUser.tasksCompleted, index + 1);
   await saveCurrentUser();
+  updateHeaderBalance();
   alert("✅ تم تنفيذ المهمة وتم إضافة الأرباح!");
   homePage();
 }
@@ -213,6 +227,7 @@ async function submitWithdraw() {
   currentUser.withdrawRequests.push({ wallet: w, amount: currentUser.balance, date: new Date().toLocaleString() });
   currentUser.balance = 0;
   await saveCurrentUser();
+  updateHeaderBalance();
   alert("✅ تم إرسال طلب السحب");
   homePage();
 }
@@ -228,7 +243,12 @@ async function saveCurrentUser() {
 }
 
 // ==== تسجيل الخروج ====
-function logout() { currentUser = null; showHeader(false); loginPage(); }
+function logout() { 
+  currentUser = null; 
+  localStorage.removeItem("taskUserEmail");
+  showHeader(false); 
+  loginPage(); 
+}
 
 // ==== لوحة الإدارة ====
 async function adminLogin() {
@@ -266,7 +286,10 @@ async function approveDeposit(email, index) {
   user.balance += req.amount;
   user.depositRequests.splice(index, 1);
   await updateData();
-  if (currentUser.email === email) currentUser = user;
+  if (currentUser.email === email) {
+    currentUser = user;
+    updateHeaderBalance();
+  }
   adminLogin();
 }
 
@@ -280,5 +303,17 @@ async function rejectDeposit(email, index) {
   adminLogin();
 }
 
-// ==== بدء التطبيق ====
-loginPage();
+// ==== استرجاع المستخدم عند تحميل الصفحة ====
+window.addEventListener("load", async () => {
+  const savedEmail = localStorage.getItem("taskUserEmail");
+  if(savedEmail){
+    await readData();
+    const user = allUsers.find(u => u.email === savedEmail);
+    if(user){
+      currentUser = user;
+      homePage();
+      return;
+    }
+  }
+  loginPage();
+});
