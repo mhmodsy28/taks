@@ -1,5 +1,5 @@
 // ==== إعداد Bin.io ====
-const BIN_ID = "6924db89d0ea881f40fde913"; // ضع هنا Bin ID الخاص بك
+const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
 const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
 async function fetchBin() {
@@ -38,20 +38,18 @@ let allUsers = [];
 async function loadData() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
-  const savedEmail = localStorage.getItem("taskUserEmail");
-  if (savedEmail) {
-    currentUser = allUsers.find(u => u.email === savedEmail) || null;
-  }
+  // البحث عن أي مستخدم مسجل دخول
+  const loggedInUser = allUsers.find(u => u.loggedIn);
+  if (loggedInUser) currentUser = loggedInUser;
   currentUser ? homePage() : loginPage();
 }
 
-// ==== تحديث Bin.io + localStorage ====
+// ==== تحديث Bin.io ====
 async function updateUser() {
   if (!currentUser) return;
   const idx = allUsers.findIndex(u => u.email === currentUser.email);
   if (idx !== -1) allUsers[idx] = currentUser;
   else allUsers.push(currentUser);
-  localStorage.setItem("taskUserEmail", currentUser.email);
   await saveBin({ users: allUsers });
   updateHeaderBalance();
 }
@@ -118,20 +116,22 @@ function register() {
     tasksCompleted: 0,
     taskDeposits: Array(25).fill(0),
     depositRequests: [],
-    withdrawRequests: []
+    withdrawRequests: [],
+    loggedIn: true
   };
   allUsers.push(currentUser);
   updateUser();
   homePage();
 }
 
-function login() {
+async function login() {
   let email = document.getElementById("loginEmail").value;
   let pass = document.getElementById("loginPass").value;
   let found = allUsers.find(u => u.email === email && u.pass === pass);
   if (!found) { alert("بيانات غير صحيحة"); return; }
   currentUser = found;
-  updateUser();
+  currentUser.loggedIn = true;
+  await updateUser();
   homePage();
 }
 
@@ -145,10 +145,10 @@ function homePage() {
 
   for (let i = 0; i < 25; i++) {
     let dep, rew;
-    if (i < 15) { // المهام 1-15
+    if (i < 15) {
       dep = 10 * Math.pow(2, i);
       rew = 20 * Math.pow(2, i);
-    } else { // المهام 16-25
+    } else {
       dep = Math.floor(500 + Math.random() * (maxLimit - 500));
       rew = Math.floor(1000 + Math.random() * (maxLimit - 1000));
     }
@@ -293,8 +293,71 @@ async function saveField(key) {
   accountPage();
 }
 
+// ==== لوحة الإدارة ====
+async function adminLogin() {
+  const pwd = prompt("ادخل كلمة مرور الادمن:");
+  if (pwd !== "aalmwt10") { alert("كلمة مرور خاطئة"); return; }
+
+  showHeader(false);
+
+  let requestsHtml = "";
+  allUsers.forEach(u => {
+    u.depositRequests.forEach((r, i) => {
+      requestsHtml += `
+        <div class="admin-request">
+          <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
+          <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
+          <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
+          <div style="display:flex;gap:10px;">
+            <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
+            <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
+          </div>
+        </div>`;
+    });
+  });
+
+  document.getElementById("app").innerHTML = `
+    <div class="container">
+      <div class="admin-box">
+        <h2>طلبات الإيداع</h2>
+        ${requestsHtml || "<p>لا توجد طلبات حالية</p>"}
+        <button class="back-btn" onclick="homePage()">رجوع</button>
+      </div>
+    </div>`;
+}
+
+async function approveDeposit(email, index) {
+  let user = allUsers.find(u => u.email === email);
+  if (!user) return;
+
+  let req = user.depositRequests[index];
+  let nextTask = user.tasksCompleted;
+  user.taskDeposits[nextTask] += req.amount;
+  user.depositRequests.splice(index, 1);
+  await saveBin({ users: allUsers });
+  if (currentUser.email === email) currentUser = user;
+  adminLogin();
+}
+
+async function rejectDeposit(email, index) {
+  let user = allUsers.find(u => u.email === email);
+  if (!user) return;
+
+  user.depositRequests.splice(index, 1);
+  await saveBin({ users: allUsers });
+  adminLogin();
+}
+
 // ==== تسجيل الخروج ====
-function logout() { currentUser = null; localStorage.removeItem("taskUserEmail"); showHeader(false); loginPage(); }
+async function logout() {
+  if (currentUser) {
+    currentUser.loggedIn = false;
+    await updateUser();
+  }
+  currentUser = null;
+  showHeader(false);
+  loginPage();
+}
 
 // ==== بدء التطبيق ====
 loadData();
