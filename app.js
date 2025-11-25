@@ -348,20 +348,28 @@ async function adminPanelLogin() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
+  // حماية من البيانات المفقودة
+  allUsers.forEach(u => {
+    if (!u.depositRequests) u.depositRequests = [];
+    if (!u.taskDeposits) u.taskDeposits = Array(25).fill(0);
+  });
+
   let requestsHtml = "";
   allUsers.forEach(u => {
-    u.depositRequests.forEach((r, i) => {
-      requestsHtml += `
-        <div class="admin-request">
-          <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
-          <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
-          <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
-          <div style="display:flex;gap:10px;">
-            <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
-            <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
-          </div>
-        </div>`;
-    });
+    if(u.depositRequests.length > 0){
+      u.depositRequests.forEach((r, i) => {
+        requestsHtml += `
+          <div class="admin-request">
+            <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
+            <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
+            <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
+            <div style="display:flex;gap:10px;">
+              <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
+              <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
+            </div>
+          </div>`;
+      });
+    }
   });
 
   document.getElementById("app").innerHTML = `
