@@ -1,20 +1,22 @@
-// ==== إعداد Bin.io ====
+ء التطبيق ==loadData();// ==== إعداد Bin.io ====
 const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
 const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
+// ==== جلب البيانات من Bin.io ====
 async function fetchBin() {
   try {
     const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
       headers: { "X-Master-Key": MASTER_KEY }
     });
     const data = await res.json();
-    return data.record;
+    return data.record || { users: [] };
   } catch (err) {
     console.error("خطأ في جلب البيانات من Bin.io", err);
     return { users: [] };
   }
 }
 
+// ==== حفظ البيانات على Bin.io ====
 async function saveBin(record) {
   try {
     await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
@@ -38,25 +40,6 @@ let allUsers = [];
 async function loadData() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
-
-  // إنشاء حساب الأدمن إذا لم يكن موجودًا
-  let admin = allUsers.find(u => u.email === "admin25@example.com");
-  if (!admin) {
-    admin = {
-      name: "Admin25",
-      email: "admin25@example.com",
-      pass: "25802580",
-      balance: 0,
-      tasksCompleted: 0,
-      taskDeposits: Array(25).fill(0),
-      depositRequests: [],
-      withdrawRequests: [],
-      loggedIn: false,
-      isAdmin: true
-    };
-    allUsers.push(admin);
-    await saveBin({ users: allUsers });
-  }
 
   // البحث عن أي مستخدم مسجل دخول
   const loggedInUser = allUsers.find(u => u.loggedIn);
@@ -127,9 +110,7 @@ function register() {
   let country = document.getElementById("regCountry").value;
   let pass = document.getElementById("regPass").value;
 
-  if (!name || !email || !nid || !phone || !pass) {
-    alert("يرجى ملء جميع الحقول"); return;
-  }
+  if (!name || !email || !nid || !phone || !pass) { alert("يرجى ملء جميع الحقول"); return; }
 
   currentUser = {
     name, email, nid, phone, country, pass,
@@ -138,10 +119,8 @@ function register() {
     taskDeposits: Array(25).fill(0),
     depositRequests: [],
     withdrawRequests: [],
-    loggedIn: true,
-    isAdmin: false
+    loggedIn: true
   };
-  allUsers.push(currentUser);
   updateUser();
   homePage();
 }
@@ -149,6 +128,8 @@ function register() {
 async function login() {
   let email = document.getElementById("loginEmail").value;
   let pass = document.getElementById("loginPass").value;
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
   let found = allUsers.find(u => u.email === email && u.pass === pass);
   if (!found) { alert("بيانات غير صحيحة"); return; }
   currentUser = found;
@@ -213,10 +194,7 @@ function openTask(index, dep, rew) {
 }
 
 function checkDeposit(index, dep, rew) {
-  if (currentUser.taskDeposits[index] < dep) {
-    alert(`❌ لا يمكن تنفيذ المهمة بدون إيداع ${dep}$`);
-    return;
-  }
+  if (currentUser.taskDeposits[index] < dep) { alert(`❌ لا يمكن تنفيذ المهمة بدون إيداع ${dep}$`); return; }
   currentUser.balance += rew;
   currentUser.tasksCompleted = Math.max(currentUser.tasksCompleted, index + 1);
   updateUser();
@@ -245,9 +223,9 @@ function submitDeposit() {
   let image = document.getElementById("depositImage").files[0];
   if (!amount || !image) { alert("يرجى إدخال المبلغ ورفع الصورة"); return; }
   let reader = new FileReader();
-  reader.onload = function () {
+  reader.onload = async function () {
     currentUser.depositRequests.push({ amount, image: reader.result, date: new Date().toLocaleString() });
-    updateUser();
+    await updateUser();
     alert("✅ تم إرسال طلب الإيداع");
     homePage();
   }
@@ -317,13 +295,14 @@ async function saveField(key) {
 
 // ==== لوحة الإدارة ====
 async function adminLogin() {
-  const pwd = prompt("ادخل كلمة مرور الادمن:");
-  if (!currentUser || currentUser.email !== "admin25@example.com" || pwd !== "25802580") { 
-    alert("كلمة مرور خاطئة"); 
-    return; 
-  }
+  const pwd = prompt("ادخل كلمة مرور الأدمن:");
+  if (pwd !== "25802580") { alert("كلمة مرور خاطئة"); return; }
 
   showHeader(false);
+
+  // جلب البيانات المحدثة من Bin.io
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
 
   let requestsHtml = "";
   allUsers.forEach(u => {
@@ -360,7 +339,7 @@ async function approveDeposit(email, index) {
   user.taskDeposits[nextTask] += req.amount;
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  adminLogin(); // العودة للوحة الإدارة بعد القبول
+  adminLogin(); // إعادة تحميل لوحة الإدارة
 }
 
 async function rejectDeposit(email, index) {
@@ -369,7 +348,7 @@ async function rejectDeposit(email, index) {
 
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  adminLogin(); // العودة للوحة الإدارة بعد الرفض
+  adminLogin();
 }
 
 // ==== تسجيل الخروج ====
