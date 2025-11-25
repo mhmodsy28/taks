@@ -348,28 +348,20 @@ async function adminPanelLogin() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
-  // حماية من البيانات المفقودة
-  allUsers.forEach(u => {
-    if (!u.depositRequests) u.depositRequests = [];
-    if (!u.taskDeposits) u.taskDeposits = Array(25).fill(0);
-  });
-
   let requestsHtml = "";
   allUsers.forEach(u => {
-    if(u.depositRequests.length > 0){
-      u.depositRequests.forEach((r, i) => {
-        requestsHtml += `
-          <div class="admin-request">
-            <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
-            <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
-            <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
-            <div style="display:flex;gap:10px;">
-              <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
-              <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
-            </div>
-          </div>`;
-      });
-    }
+    u.depositRequests.forEach((r, i) => {
+      requestsHtml += `
+        <div class="admin-request">
+          <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
+          <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
+          <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
+          <div style="display:flex;gap:10px;">
+            <button onclick="approveDeposit('${u.email}')">✅ قبول</button>
+            <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}')">❌ رفض</button>
+          </div>
+        </div>`;
+    });
   });
 
   document.getElementById("app").innerHTML = `
@@ -382,24 +374,26 @@ async function adminPanelLogin() {
     </div>`;
 }
 
-// ==== الموافقة ورفض الإيداع ====
-async function approveDeposit(email, index) {
+// ==== الموافقة ورفض الإيداع - نسخة محسنة ====
+async function approveDeposit(email) {
   let user = allUsers.find(u => u.email === email);
-  if (!user) return;
+  if (!user || !user.depositRequests || user.depositRequests.length === 0) return;
 
-  let req = user.depositRequests[index];
+  let req = user.depositRequests[0];
   let nextTask = user.tasksCompleted;
+  if(!user.taskDeposits) user.taskDeposits = Array(25).fill(0);
   user.taskDeposits[nextTask] += req.amount;
-  user.depositRequests.splice(index, 1);
+
+  user.depositRequests.shift();
   await saveBin({ users: allUsers });
   adminPanelLogin();
 }
 
-async function rejectDeposit(email, index) {
+async function rejectDeposit(email) {
   let user = allUsers.find(u => u.email === email);
-  if (!user) return;
+  if (!user || !user.depositRequests || user.depositRequests.length === 0) return;
 
-  user.depositRequests.splice(index, 1);
+  user.depositRequests.shift();
   await saveBin({ users: allUsers });
   adminPanelLogin();
 }
