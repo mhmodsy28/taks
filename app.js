@@ -1,5 +1,5 @@
 // ==== إعداد Bin.io ====
-const BIN_ID = "6924db89d0ea881f40fde913";
+const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
 const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
 // ==== جلب البيانات من Bin.io ====
@@ -319,16 +319,26 @@ async function saveField(key) {
   accountPage();
 }
 
-// ==== لوحة الإدارة ====
+// ==== لوحة الإدارة مع تحديث تلقائي كل 5 ثواني ====
+let adminInterval = null;
 async function adminLogin() {
-  // جلب البيانات المحدثة من Bin.io
-  const binData = await fetchBin();
-  allUsers = binData.users || [];
-
   if (!currentUser || !currentUser.isAdmin) { alert("❌ ليس لديك صلاحيات الادمن"); return; }
 
-  showHeader(false);
+  showHeader(true);
 
+  if (adminInterval) clearInterval(adminInterval); // إزالة أي تحديث سابق
+  await updateAdminRequests(); // تحميل أولي
+
+  adminInterval = setInterval(updateAdminRequests, 5000); // تحديث تلقائي كل 5 ثواني
+}
+
+async function updateAdminRequests() {
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
+  renderAdminRequests();
+}
+
+function renderAdminRequests() {
   let requestsHtml = "";
   allUsers.forEach(u => {
     u.depositRequests.forEach((r, i) => {
@@ -350,30 +360,38 @@ async function adminLogin() {
       <div class="admin-box">
         <h2>طلبات الإيداع</h2>
         ${requestsHtml || "<p>لا توجد طلبات حالية</p>"}
-        <button class="back-btn" onclick="homePage()">رجوع</button>
+        <button class="back-btn" onclick="exitAdmin()">رجوع</button>
       </div>
     </div>`;
 }
 
 async function approveDeposit(email, index) {
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
-
   let req = user.depositRequests[index];
   let nextTask = user.tasksCompleted;
+  if (!user.taskDeposits[nextTask]) user.taskDeposits[nextTask] = 0;
   user.taskDeposits[nextTask] += req.amount;
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  adminLogin();
+  updateAdminRequests();
 }
 
 async function rejectDeposit(email, index) {
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
-
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  adminLogin();
+  updateAdminRequests();
+}
+
+function exitAdmin() {
+  if (adminInterval) clearInterval(adminInterval);
+  homePage();
 }
 
 // ==== تسجيل الخروج ====
