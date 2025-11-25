@@ -64,8 +64,6 @@ async function loadData() {
     await saveBin({ users: allUsers });
   } else {
     adminUser.isAdmin = true;
-    if (!Array.isArray(adminUser.depositRequests)) adminUser.depositRequests = [];
-    if (!Array.isArray(adminUser.taskDeposits)) adminUser.taskDeposits = Array(25).fill(0);
   }
 
   // التأكد من أي مستخدم مسجل دخول
@@ -166,8 +164,6 @@ async function login() {
   currentUser = found;
   currentUser.loggedIn = true;
   if (!currentUser.hasOwnProperty("isAdmin")) currentUser.isAdmin = email === ADMIN_EMAIL;
-  if (!Array.isArray(currentUser.depositRequests)) currentUser.depositRequests = [];
-  if (!Array.isArray(currentUser.taskDeposits)) currentUser.taskDeposits = Array(25).fill(0);
   await updateUser();
   homePage();
 }
@@ -352,26 +348,28 @@ async function adminPanelLogin() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
-  // التأكد من وجود المصفوفات
+  // حماية من البيانات المفقودة
   allUsers.forEach(u => {
-    if (!Array.isArray(u.depositRequests)) u.depositRequests = [];
-    if (!Array.isArray(u.taskDeposits)) u.taskDeposits = Array(25).fill(0);
+    if (!u.depositRequests) u.depositRequests = [];
+    if (!u.taskDeposits) u.taskDeposits = Array(25).fill(0);
   });
 
   let requestsHtml = "";
   allUsers.forEach(u => {
-    u.depositRequests.forEach((r, i) => {
-      requestsHtml += `
-        <div class="admin-request">
-          <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
-          <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
-          <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
-          <div style="display:flex;gap:10px;">
-            <button onclick="approveDeposit('${u.email}', ${i})">✅ قبول</button>
-            <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}', ${i})">❌ رفض</button>
-          </div>
-        </div>`;
-    });
+    if(u.depositRequests.length > 0){
+      u.depositRequests.forEach((r, i) => {
+        requestsHtml += `
+          <div class="admin-request">
+            <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
+            <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
+            <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
+            <div style="display:flex;gap:10px;">
+              <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
+              <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
+            </div>
+          </div>`;
+      });
+    }
   });
 
   document.getElementById("app").innerHTML = `
@@ -388,7 +386,6 @@ async function adminPanelLogin() {
 async function approveDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
-  if (!Array.isArray(user.taskDeposits)) user.taskDeposits = Array(25).fill(0);
 
   let req = user.depositRequests[index];
   let nextTask = user.tasksCompleted;
