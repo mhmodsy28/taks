@@ -6,12 +6,17 @@ const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2
 async function fetchBin() {
   try {
     const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-      headers: { "X-Master-Key": MASTER_KEY }
+      headers: { 
+        "X-Master-Key": MASTER_KEY,
+        "X-Bin-Versioning": "false"
+      }
     });
     const data = await res.json();
+    if (!data.record) throw new Error("Bin.io لا يحتوي على record");
     return data.record || { users: [] };
   } catch (err) {
-    console.error("خطأ في جلب البيانات من Bin.io", err);
+    console.error("خطأ في جلب البيانات من Bin.io:", err);
+    alert("❌ حدث خطأ في جلب البيانات من الخادم. تحقق من BIN_ID و MASTER_KEY.");
     return { users: [] };
   }
 }
@@ -29,6 +34,7 @@ async function saveBin(record) {
     });
   } catch (err) {
     console.error("خطأ في حفظ البيانات على Bin.io", err);
+    alert("❌ حدث خطأ أثناء حفظ البيانات. حاول مرة أخرى.");
   }
 }
 
@@ -58,10 +64,9 @@ async function loadData() {
     };
     allUsers.push(adminUser);
     await saveBin({ users: allUsers });
-  } else {
-    adminUser.isAdmin = true;
   }
 
+  // التأكد من أي مستخدم مسجل دخول
   const loggedInUser = allUsers.find(u => u.loggedIn);
   if (loggedInUser) currentUser = loggedInUser;
 
@@ -318,82 +323,59 @@ async function saveField(key) {
   accountPage();
 }
 
-// ==== نافذة تسجيل دخول الادمن لأي مستخدم ====
-function adminPrompt() {
-  let html = `
-    <div class="container">
-      <div class="box">
-        <h2>تسجيل دخول الادمن</h2>
-        <input id="adminUser" placeholder="اسم المستخدم">
-        <input id="adminPass" type="password" placeholder="كلمة المرور">
-        <button onclick="adminLoginViaPrompt()">تسجيل دخول</button>
-        <button class="back-btn" onclick="homePage()">رجوع</button>
-      </div>
-    </div>`;
-  document.getElementById("app").innerHTML = html;
+// ==== لوحة الإدارة (كل الحسابات تحتاج ادمن) ====
+function adminLogin() {
+  showHeader(false);
+  document.getElementById("app").innerHTML = `
+  <div class="container">
+    <div class="box">
+      <h2>تسجيل دخول الادمن</h2>
+      <input id="adminUser" placeholder="اسم المستخدم">
+      <input id="adminPass" type="password" placeholder="كلمة المرور">
+      <button onclick="submitAdminLogin()">تسجيل الدخول</button>
+      <button class="back-btn" onclick="homePage()">رجوع</button>
+    </div>
+  </div>`;
 }
 
-async function adminLoginViaPrompt() {
+async function submitAdminLogin() {
   const user = document.getElementById("adminUser").value;
   const pass = document.getElementById("adminPass").value;
 
-  const ADMIN_USER = "admin25";
-  const ADMIN_PASS = "25802580";
+  const binData = await fetchBin();
+  allUsers = binData.users || [];
 
-  if (user !== ADMIN_USER || pass !== ADMIN_PASS) {
-    alert("❌ اسم المستخدم أو كلمة المرور غير صحيحة");
-    return;
-  }
+  let admin = allUsers.find(u => u.email === user && u.pass === pass && u.isAdmin);
+  if (!admin) { alert("❌ بيانات الادمن غير صحيحة"); return; }
 
-  await adminLogin(true);
-}
-
-// ==== فتح لوحة الادمن ====
-async function adminLogin(bypass = false) {
-  if (!bypass && (!currentUser || !currentUser.isAdmin)) { 
-    alert("❌ ليس لديك صلاحيات الادمن"); 
-    return; 
-  }
-
-  showHeader(true);
-  document.getElementById("app").innerHTML = `<div class="container"><div class="box"><p>جارٍ تحميل الطلبات...</p></div></div>`;
-
-  try {
-    const binData = await fetchBin();
-    allUsers = binData.users || [];
-
-    let requestsHtml = "";
-    allUsers.forEach(user => {
-      user.depositRequests.forEach((req, i) => {
-        requestsHtml += `
-          <div class="admin-request">
-            <p><b>المستخدم:</b> ${user.name} | ${user.email}</p>
-            <p><b>المبلغ:</b> ${req.amount}$ | التاريخ: ${req.date}</p>
-            <img src="${req.image}" alt="صورة الإيداع" style="max-width:200px;">
-            <div style="display:flex;gap:10px;margin-top:5px;">
-              <button onclick="approveDeposit('${user.email}',${i})">✅ قبول</button>
-              <button style="background:red;color:white;" onclick="rejectDeposit('${user.email}',${i})">❌ رفض</button>
-            </div>
-          </div>`;
-      });
+  // عرض جميع طلبات الإيداع
+  let requestsHtml = "";
+  allUsers.forEach(u => {
+    u.depositRequests.forEach((r, i) => {
+      requestsHtml += `
+        <div class="admin-request">
+          <p><b>المستخدم:</b> ${u.name} | ${u.email}</p>
+          <p><b>المبلغ:</b> ${r.amount}$ | التاريخ: ${r.date}</p>
+          <img src="${r.image}" alt="صورة الإيداع" style="max-width:200px;">
+          <div style="display:flex;gap:10px;">
+            <button onclick="approveDeposit('${u.email}',${i})">✅ قبول</button>
+            <button style="background:red;color:white;" onclick="rejectDeposit('${u.email}',${i})">❌ رفض</button>
+          </div>
+        </div>`;
     });
+  });
 
-    document.getElementById("app").innerHTML = `
-      <div class="container">
-        <div class="admin-box">
-          <h2>طلبات الإيداع</h2>
-          ${requestsHtml || "<p>لا توجد طلبات حالية</p>"}
-          <button class="back-btn" onclick="homePage()">رجوع</button>
-        </div>
-      </div>`;
-  } catch (err) {
-    alert("❌ حدث خطأ في جلب الطلبات");
-    console.error(err);
-    homePage();
-  }
+  document.getElementById("app").innerHTML = `
+    <div class="container">
+      <div class="admin-box">
+        <h2>طلبات الإيداع</h2>
+        ${requestsHtml || "<p>لا توجد طلبات حالية</p>"}
+        <button class="back-btn" onclick="homePage()">رجوع</button>
+      </div>
+    </div>`;
 }
 
-// ==== قبول ورفض الايداعات ====
+// ==== الموافقة والرفض على الايداعات ====
 async function approveDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
@@ -403,7 +385,7 @@ async function approveDeposit(email, index) {
   user.taskDeposits[nextTask] += req.amount;
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  adminLogin(true);
+  submitAdminLogin();
 }
 
 async function rejectDeposit(email, index) {
@@ -412,7 +394,7 @@ async function rejectDeposit(email, index) {
 
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  adminLogin(true);
+  submitAdminLogin();
 }
 
 // ==== تسجيل الخروج ====
