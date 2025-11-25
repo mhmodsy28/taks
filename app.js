@@ -1,5 +1,5 @@
 // ==== إعداد Bin.io ====
-const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
+const BIN_ID = "6924db89d0ea881f40fde913";
 const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
 // ==== جلب البيانات من Bin.io ====
@@ -41,7 +41,7 @@ async function loadData() {
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
-  // تأكد من وجود الادمن الافتراضي
+  // التأكد من وجود حساب الادمن
   let adminUser = allUsers.find(u => u.email === "admin25");
   if (!adminUser) {
     adminUser = {
@@ -58,9 +58,11 @@ async function loadData() {
     };
     allUsers.push(adminUser);
     await saveBin({ users: allUsers });
+  } else {
+    adminUser.isAdmin = true;
   }
 
-  // البحث عن أي مستخدم مسجل دخول
+  // التأكد من أي مستخدم مسجل دخول
   const loggedInUser = allUsers.find(u => u.loggedIn);
   if (loggedInUser) currentUser = loggedInUser;
 
@@ -121,7 +123,7 @@ function registerPage() {
   </div></div>`;
 }
 
-function register() {
+async function register() {
   let name = document.getElementById("regName").value;
   let email = document.getElementById("regEmail").value;
   let nid = document.getElementById("regNID").value;
@@ -141,23 +143,23 @@ function register() {
     loggedIn: true,
     isAdmin: false
   };
-  updateUser();
+  await updateUser();
   homePage();
 }
 
 async function login() {
   let email = document.getElementById("loginEmail").value;
   let pass = document.getElementById("loginPass").value;
+
   const binData = await fetchBin();
   allUsers = binData.users || [];
+
   let found = allUsers.find(u => u.email === email && u.pass === pass);
   if (!found) { alert("بيانات غير صحيحة"); return; }
 
-  // تأكد من وجود isAdmin
-  if (found.isAdmin === undefined) found.isAdmin = false;
-
   currentUser = found;
   currentUser.loggedIn = true;
+  if (!currentUser.hasOwnProperty("isAdmin")) currentUser.isAdmin = email === "admin25";
   await updateUser();
   homePage();
 }
@@ -256,17 +258,76 @@ function submitDeposit() {
   reader.readAsDataURL(image);
 }
 
+// ==== السحب ====
+function withdrawPage() {
+  if (currentUser.tasksCompleted < 20) { alert("❌ لا يمكن السحب قبل المهمة 20"); return; }
+  document.getElementById("app").innerHTML = `
+  <div class="container">
+    <div class="box">
+      <h2>سحب الأموال</h2>
+      <p>رصيدك: ${currentUser.balance}$</p>
+      <input id="withdrawWallet" placeholder="أدخل محفظتك">
+      <button onclick="submitWithdraw()">طلب سحب</button>
+      <button class="back-btn" onclick="homePage()">رجوع</button>
+    </div>
+  </div>`;
+}
+
+function submitWithdraw() {
+  let w = document.getElementById("withdrawWallet").value;
+  if (!w) { alert("يرجى إدخال المحفظة"); return; }
+  currentUser.withdrawRequests.push({ wallet: w, amount: currentUser.balance, date: new Date().toLocaleString() });
+  currentUser.balance = 0;
+  updateUser();
+  alert("✅ تم إرسال طلب السحب");
+  homePage();
+}
+
+// ==== صفحة الحساب مع تعديل البيانات ====
+function accountPage() {
+  document.getElementById("app").innerHTML = `
+  <div class="container">
+    <div class="box">
+      <h2>معلومات الحساب</h2>
+      ${renderEditableField("الاسم", "name", currentUser.name)}
+      ${renderEditableField("البريد الإلكتروني", "email", currentUser.email)}
+      ${renderEditableField("الهاتف", "phone", currentUser.phone)}
+      ${renderEditableField("الدولة", "country", currentUser.country)}
+      ${renderEditableField("الرقم الوطني", "nid", currentUser.nid)}
+      <p><b>الرصيد الحالي:</b> ${currentUser.balance}$</p>
+      <p><b>عدد المهام المنجزة:</b> ${currentUser.tasksCompleted}</p>
+      <button class="back-btn" onclick="homePage()">رجوع</button>
+    </div>
+  </div>`;
+}
+
+function renderEditableField(label, key, value) {
+  return `<p><b>${label}:</b> <span id="field-${key}">${value}</span>
+    <i class="fa-solid fa-pen" style="cursor:pointer;" onclick="editField('${key}')"></i></p>`;
+}
+
+function editField(key) {
+  const span = document.getElementById(`field-${key}`);
+  const oldValue = span.innerText;
+  span.innerHTML = `<input id="input-${key}" value="${oldValue}"> <button onclick="saveField('${key}')">✅</button>`;
+}
+
+async function saveField(key) {
+  const input = document.getElementById(`input-${key}`);
+  currentUser[key] = input.value;
+  await updateUser();
+  accountPage();
+}
+
 // ==== لوحة الإدارة ====
 async function adminLogin() {
-  if (!currentUser || !currentUser.isAdmin) {
-    alert("❌ ليس لديك صلاحيات الادمن");
-    return;
-  }
-
-  showHeader(false);
-
+  // جلب البيانات المحدثة من Bin.io
   const binData = await fetchBin();
   allUsers = binData.users || [];
+
+  if (!currentUser || !currentUser.isAdmin) { alert("❌ ليس لديك صلاحيات الادمن"); return; }
+
+  showHeader(false);
 
   let requestsHtml = "";
   allUsers.forEach(u => {
@@ -297,6 +358,7 @@ async function adminLogin() {
 async function approveDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
+
   let req = user.depositRequests[index];
   let nextTask = user.tasksCompleted;
   user.taskDeposits[nextTask] += req.amount;
@@ -308,6 +370,7 @@ async function approveDeposit(email, index) {
 async function rejectDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
+
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
   adminLogin();
