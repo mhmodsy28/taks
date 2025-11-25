@@ -2,21 +2,20 @@
 const BIN_ID = "6924db89d0ea881f40fde913"; // ضع Bin ID هنا
 const MASTER_KEY = "$2a$10$k7UNDXuzwGDFt8SlvSm02.DfIHhcwx5A/IurS6k0..aiZ8aLYkVz2";
 
+// ==== بيانات الادمن ====
+const ADMIN_EMAIL = "admin25";
+const ADMIN_PASS = "25802580";
+
 // ==== جلب البيانات من Bin.io ====
 async function fetchBin() {
   try {
     const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-      headers: { 
-        "X-Master-Key": MASTER_KEY,
-        "X-Bin-Versioning": "false"
-      }
+      headers: { "X-Master-Key": MASTER_KEY }
     });
     const data = await res.json();
-    if (!data.record) throw new Error("Bin.io لا يحتوي على record");
     return data.record || { users: [] };
   } catch (err) {
-    console.error("خطأ في جلب البيانات من Bin.io:", err);
-    alert("❌ حدث خطأ في جلب البيانات من الخادم. تحقق من BIN_ID و MASTER_KEY.");
+    console.error("خطأ في جلب البيانات من Bin.io", err);
     return { users: [] };
   }
 }
@@ -34,7 +33,6 @@ async function saveBin(record) {
     });
   } catch (err) {
     console.error("خطأ في حفظ البيانات على Bin.io", err);
-    alert("❌ حدث خطأ أثناء حفظ البيانات. حاول مرة أخرى.");
   }
 }
 
@@ -48,12 +46,12 @@ async function loadData() {
   allUsers = binData.users || [];
 
   // التأكد من وجود حساب الادمن
-  let adminUser = allUsers.find(u => u.email === "admin25");
+  let adminUser = allUsers.find(u => u.email === ADMIN_EMAIL);
   if (!adminUser) {
     adminUser = {
       name: "Admin",
-      email: "admin25",
-      pass: "25802580",
+      email: ADMIN_EMAIL,
+      pass: ADMIN_PASS,
       balance: 0,
       tasksCompleted: 0,
       taskDeposits: Array(25).fill(0),
@@ -64,6 +62,8 @@ async function loadData() {
     };
     allUsers.push(adminUser);
     await saveBin({ users: allUsers });
+  } else {
+    adminUser.isAdmin = true;
   }
 
   // التأكد من أي مستخدم مسجل دخول
@@ -163,7 +163,7 @@ async function login() {
 
   currentUser = found;
   currentUser.loggedIn = true;
-  if (!currentUser.hasOwnProperty("isAdmin")) currentUser.isAdmin = email === "admin25";
+  if (!currentUser.hasOwnProperty("isAdmin")) currentUser.isAdmin = email === ADMIN_EMAIL;
   await updateUser();
   homePage();
 }
@@ -323,32 +323,31 @@ async function saveField(key) {
   accountPage();
 }
 
-// ==== لوحة الإدارة (كل الحسابات تحتاج ادمن) ====
+// ==== لوحة الإدارة: نموذج تسجيل دخول الادمن ====
 function adminLogin() {
-  showHeader(false);
   document.getElementById("app").innerHTML = `
   <div class="container">
     <div class="box">
       <h2>تسجيل دخول الادمن</h2>
-      <input id="adminUser" placeholder="اسم المستخدم">
+      <input id="adminEmail" placeholder="اسم المستخدم">
       <input id="adminPass" type="password" placeholder="كلمة المرور">
-      <button onclick="submitAdminLogin()">تسجيل الدخول</button>
+      <button onclick="adminPanelLogin()">تسجيل دخول</button>
       <button class="back-btn" onclick="homePage()">رجوع</button>
     </div>
   </div>`;
 }
 
-async function submitAdminLogin() {
-  const user = document.getElementById("adminUser").value;
+// ==== التحقق من بيانات الادمن وفتح لوحة الإيداعات ====
+async function adminPanelLogin() {
+  const email = document.getElementById("adminEmail").value;
   const pass = document.getElementById("adminPass").value;
 
+  if (email !== ADMIN_EMAIL || pass !== ADMIN_PASS) { alert("❌ بيانات الادمن غير صحيحة"); return; }
+
+  // جلب البيانات المحدثة من Bin.io
   const binData = await fetchBin();
   allUsers = binData.users || [];
 
-  let admin = allUsers.find(u => u.email === user && u.pass === pass && u.isAdmin);
-  if (!admin) { alert("❌ بيانات الادمن غير صحيحة"); return; }
-
-  // عرض جميع طلبات الإيداع
   let requestsHtml = "";
   allUsers.forEach(u => {
     u.depositRequests.forEach((r, i) => {
@@ -375,7 +374,7 @@ async function submitAdminLogin() {
     </div>`;
 }
 
-// ==== الموافقة والرفض على الايداعات ====
+// ==== الموافقة ورفض الإيداع ====
 async function approveDeposit(email, index) {
   let user = allUsers.find(u => u.email === email);
   if (!user) return;
@@ -385,7 +384,7 @@ async function approveDeposit(email, index) {
   user.taskDeposits[nextTask] += req.amount;
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  submitAdminLogin();
+  adminPanelLogin();
 }
 
 async function rejectDeposit(email, index) {
@@ -394,7 +393,7 @@ async function rejectDeposit(email, index) {
 
   user.depositRequests.splice(index, 1);
   await saveBin({ users: allUsers });
-  submitAdminLogin();
+  adminPanelLogin();
 }
 
 // ==== تسجيل الخروج ====
